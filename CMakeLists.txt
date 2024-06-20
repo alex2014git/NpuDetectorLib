@@ -41,9 +41,6 @@ target_link_libraries(NpuLibrary
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
-# Add compile definitions
-target_compile_definitions(NpuLibrary PRIVATE ${COMMON_COMPILE_DEFINITIONS})
-
 # Specify the output directory
 set_target_properties(NpuLibrary PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib

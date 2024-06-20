@@ -16,16 +16,23 @@ if (NOT DEFINED HAILORT_LIB)
     endif (UNIX)
 endif ()
 
-# Set common compile definitions
-set(COMMON_COMPILE_DEFINITIONS
-    LETTER_BOX
-    SHOW_LABEL
-    CACHE INTERNAL "Common compile definitions"
-)
+if(NOT DEFINED LETTER_BOX)
+    set(LETTER_BOX OFF CACHE INTERNAL "Enable letterboxing functionality")
+endif()
 
-# Optional compile definitions
-# set(COMMON_COMPILE_DEFINITIONS
-#     ${COMMON_COMPILE_DEFINITIONS}
-#     TIME_TRACE_DEBUG
-#     CACHE INTERNAL "Common compile definitions with optional TIME_TRACE_DEBUG"
-# )
+# Allow overriding with command-line argument
+option(LETTER_BOX "Enable letterboxing functionality" ${LETTER_BOX})
+
+if(NOT DEFINED SHOW_LABEL)
+    set(SHOW_LABEL OFF CACHE INTERNAL "Enable show labels functionality")
+endif()
+
+# Allow overriding with command-line argument
+option(SHOW_LABEL "Enable show labels functionality" ${SHOW_LABEL})
+
+if(NOT DEFINED TIME_TRACE_DEBUG)
+    set(TIME_TRACE_DEBUG OFF CACHE INTERNAL "Enable debuging and time tracking functionality")
+endif()
+
+# Allow overriding with command-line argument
+option(TIME_TRACE_DEBUG "Enable debuging and time tracking functionality" ${TIME_TRACE_DEBUG})
