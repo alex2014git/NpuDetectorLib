@@ -7,14 +7,8 @@ project(NpuLibrary)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
-if (UNIX)
-set(HAILORT_INCLUDE "/usr/include/hailo")
-set(HAILORT_LIB "/usr/lib/libhailort.so")
-else ()
-set(HAILORT_ROOT "C:/Program Files/HailoRT")
-set(HAILORT_INCLUDE "${HAILORT_ROOT}/include")
-set(HAILORT_LIB "${HAILORT_ROOT}/lib/libhailort.lib")
-endif (UNIX)
+# Include common macros and definitions
+include(${PROJECT_SOURCE_DIR}/common.cmake)
 
 # Find required packages
 find_package(Threads REQUIRED)
@@ -48,9 +42,7 @@ target_link_libraries(NpuLibrary
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 # Add compile definitions
-target_compile_definitions(NpuLibrary PRIVATE LETTER_BOX)
-#target_compile_definitions(NpuLibrary PRIVATE TIME_TRACE_DEBUG)
-#target_compile_definitions(NpuLibrary PRIVATE SHOW_LABEL)
+target_compile_definitions(NpuLibrary PRIVATE ${COMMON_COMPILE_DEFINITIONS})
 
 # Specify the output directory
 set_target_properties(NpuLibrary PROPERTIES
@@ -62,9 +54,12 @@ install(TARGETS NpuLibrary
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
+install(FILES ${PROJECT_SOURCE_DIR}/common.cmake DESTINATION share/NpuLibrary)
 
 # Create an executable for testing/demo purposes
-add_executable(test main.cpp)
+file(GLOB TEST_SOURCES tests/*.cpp)
+
+add_executable(test ${TEST_SOURCES})
 target_link_libraries(test
     NpuLibrary
     ${HAILORT_LIB}
