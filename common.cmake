@@ -1,4 +1,5 @@
-# Set common include and library paths
+# Allow setting HAILORT paths through options
+
 if (NOT DEFINED HAILORT_INCLUDE)
     if (UNIX)
         set(HAILORT_INCLUDE "/usr/include/hailo" CACHE PATH "Path to HailoRT include directory")
@@ -15,24 +16,23 @@ if (NOT DEFINED HAILORT_LIB)
         set(HAILORT_LIB "${HAILORT_ROOT}/lib/libhailort.lib" CACHE FILEPATH "Path to HailoRT library")
     endif (UNIX)
 endif ()
+option(HAILORT_INCLUDE "Path to HailoRT include directory" "/usr/include/hailo")
+option(HAILORT_LIB "Path to HailoRT library" "/usr/lib/libhailort.so")
 
 if(NOT DEFINED LETTER_BOX)
-    set(LETTER_BOX OFF CACHE INTERNAL "Enable letterboxing functionality")
+    set(LETTER_BOX ON CACHE BOOL "Enable letterboxing functionality")
 endif()
 
-# Allow overriding with command-line argument
 option(LETTER_BOX "Enable letterboxing functionality" ${LETTER_BOX})
 
 if(NOT DEFINED SHOW_LABEL)
-    set(SHOW_LABEL OFF CACHE INTERNAL "Enable show labels functionality")
+    set(SHOW_LABEL OFF CACHE BOOL "Enable show labels functionality")
 endif()
 
-# Allow overriding with command-line argument
 option(SHOW_LABEL "Enable show labels functionality" ${SHOW_LABEL})
 
 if(NOT DEFINED TIME_TRACE_DEBUG)
-    set(TIME_TRACE_DEBUG OFF CACHE INTERNAL "Enable debuging and time tracking functionality")
+    set(TIME_TRACE_DEBUG OFF CACHE BOOL "Enable debugging and time tracking functionality")
 endif()
 
-# Allow overriding with command-line argument
-option(TIME_TRACE_DEBUG "Enable debuging and time tracking functionality" ${TIME_TRACE_DEBUG})
+option(TIME_TRACE_DEBUG "Enable debugging and time tracking functionality" ${TIME_TRACE_DEBUG})

@@ -334,7 +334,7 @@ std::string NpuBaseImpl::GetVersion()
 
 std::string NpuBaseImpl::GetFinalLabel(float conf, std::string label)
 {
-  #if SHOW_LABEL
+  #ifdef SHOW_LABEL
     float rounded_provability = floorf(conf*10000) / 100;
     std::ostringstream os_label;
     os_label << label;
