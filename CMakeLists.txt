@@ -11,6 +11,7 @@ message("HAILORT_LIB value: ${HAILORT_LIB}")
 message("LETTER_BOX value: ${LETTER_BOX}")
 message("SHOW_LABEL value: ${SHOW_LABEL}")
 message("TIME_TRACE_DEBUG value: ${TIME_TRACE_DEBUG}")
+message("BUILD_TESTER value: ${BUILD_TESTER}")
 # Set the C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -71,13 +72,15 @@ install(TARGETS NpuLibrary
 install(DIRECTORY include/ DESTINATION include)
 install(FILES ${PROJECT_SOURCE_DIR}/common.cmake DESTINATION share/NpuLibrary)
 
-# Create an executable for testing/demo purposes
-file(GLOB TEST_SOURCES tests/*.cpp)
+if (BUILD_TESTER)
+    # Create an executable for testing/demo purposes
+    file(GLOB TEST_SOURCES tests/*.cpp)
 
-add_executable(test ${TEST_SOURCES})
-target_link_libraries(test
-    NpuLibrary
-    ${HAILORT_LIB}
-    ${OpenCV_LIBS}
-    Threads::Threads
-)
+    #add_executable(test ${TEST_SOURCES})
+    target_link_libraries(test
+        NpuLibrary
+        ${HAILORT_LIB}
+        ${OpenCV_LIBS}
+        Threads::Threads
+    )
+endif()

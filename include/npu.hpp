@@ -16,9 +16,10 @@ enum algorithm {
 
 typedef struct _image_share
 {
-    void *data;       // image bitmap data point, one pixel is 3 bytes for BGR,
+    void *data;       // image bitmap data point
     int width;        // width, in pixel unit
     int height;       // height, in pixel unit
+    int ch;           // image channel. for now is 3 for RGB888 or 4 for RGBA8888
 } image_share_t;
 
 // Define the _object_roi structure

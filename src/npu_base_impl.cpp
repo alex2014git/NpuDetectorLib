@@ -447,12 +447,19 @@ void NpuBaseImpl::DrawResult(image_share_t imgData, bool needFormat)
     //the image data is RGB
     int width = imgData.width;
     int height = imgData.height;
+    int channel = imgData.ch;
     int max_dim = ( width >= height ) ? width : height;
     int w_compen = ( width >= height ) ? 0 : ((height - width) / 2);
     int h_compen = ( width >= height ) ? ((width - height) / 2) : 0;
-    cv::Mat showFrame(cv::Size(width, height), CV_8UC3, (void *)imgData.data);
+    cv::Mat showFrame;
+    cv::Size frameSize(width, height);  // Create cv::Size object
+    if((channel == 0) || (channel == 3)) {
+        showFrame = cv::Mat(frameSize, CV_8UC3, imgData.data);
+    } else {
+        showFrame = cv::Mat(frameSize, CV_8UC4, imgData.data);
+    }
     if(needFormat) {
-        memset(showFrame.data, 0, width * height * 3);
+        memset(showFrame.data, 0, width * height * channel);
     }
     DrawObject(imgData, showFrame, max_dim, w_compen, h_compen);
 }
