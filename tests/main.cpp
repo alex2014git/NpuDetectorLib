@@ -12,7 +12,7 @@
 
 char input_file_name[MAX_NAME_LEN] = "input.mp4";
 char output_file_name[MAX_NAME_LEN] = "output.mp4";
-char model_json_path[MAX_NAME_LEN] = "yolov5s.json";
+char model_json_path[MAX_NAME_LEN] = "models/yolov5s.json";
 char running_alg[MAX_NAME_LEN] = "yolov5";
 int frame_count = 1;
 int thread_count = 1;
@@ -114,6 +114,7 @@ void process_video(int thread_id, const std::string& input_file, const std::stri
         imgData.data = (void*)frame.datastart;
         imgData.width = frame.cols;
         imgData.height = frame.rows;
+        imgData.ch = 3;
 
         npuBase->Detect(imgData, true);
         npuBase->DrawResult(imgData, false);

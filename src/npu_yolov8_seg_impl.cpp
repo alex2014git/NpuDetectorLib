@@ -131,69 +131,99 @@ void NpuYolov8SegImpl::DrawResult(image_share_t imgData, bool needFormat)
         {17, cv::Vec3b(158, 158, 158)},
         {18, cv::Vec3b(96, 125, 139)}
     };
-    //the image data is RGB
+
     int width = imgData.width;
     int height = imgData.height;
-    int max_dim = ( width >= height ) ? width : height;
-    int w_compen = ( width >= height ) ? 0 : ((height - width) / 2);
-    int h_compen = ( width >= height ) ? ((width - height) / 2) : 0;
-    cv::Mat showFrame(cv::Size(width, height), CV_8UC3, (void *)imgData.data);
+    int channel = imgData.ch;
+    int max_dim = (width >= height) ? width : height;
+    int w_compen = (width >= height) ? 0 : ((height - width) / 2);
+    int h_compen = (width >= height) ? ((width - height) / 2) : 0;
+    cv::Mat showFrame;
+    cv::Size frameSize(width, height);  // Create cv::Size object
 
-    if(needFormat) {
-        memset(showFrame.data, 0, width * height * 3);
+    // Initialize the showFrame based on the number of channels
+    if (channel == 3) {
+        showFrame = cv::Mat(frameSize, CV_8UC3, imgData.data);
+    } else if (channel == 4) {
+        showFrame = cv::Mat(frameSize, CV_8UC4, imgData.data);
+    } else {
+        // Handle unsupported channel number
+        std::cerr << "Unsupported number of channels: " << channel << std::endl;
+        return;
     }
 
-    //DrawObject(imgData, showFrame, max_dim, w_compen, h_compen);
+    if (needFormat) {
+        memset(showFrame.data, 0, width * height * channel);
+    }
+
+    // DrawObject function call (if required)
+    // DrawObject(imgData, showFrame, max_dim, w_compen, h_compen);
+
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> random_index(0, COLORS.size() - 1);
+
     cv::Mat mask_full(height, width, CV_32FC1);
     for (size_t i = 0; i < _objects.size() && i < _filtered_masks.size(); ++i) {
         const auto& object = _objects[i];
         const auto& mask = _filtered_masks[i];
+
         // Draw the objects
-      #ifdef LETTER_BOX
+        #ifdef LETTER_BOX
         x1 = object.x_min * float(max_dim) - w_compen;
         y1 = object.y_min * float(max_dim) - h_compen;
         x2 = object.x_max * float(max_dim) - w_compen;
         y2 = object.y_max * float(max_dim) - h_compen;
-      #else
+        #else
         x1 = object.x_min * width;
         y1 = object.y_min * height;
         x2 = object.x_max * width;
         y2 = object.y_max * height;
-      #endif
-        rectangle(showFrame, cv::Point(x1, y1),
-                    cv::Point(x2, y2), cv::Scalar(0, 255, 0, 255), 2);
-        putText(showFrame, object.name, cv::Point(x1, y1 - 12),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5 , cv::Scalar(0, 0, 255, 255), 1 , 0);
+        #endif
 
-        //draw the mask.
-        cv::Mat overlay = cv::Mat(height, width, CV_8UC3, cv::Scalar(0));
+        cv::Scalar box_color = (channel == 3) ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 255, 0, 255);
+        rectangle(showFrame, cv::Point(x1, y1), cv::Point(x2, y2), box_color, 2);
+
+        cv::Scalar text_color = (channel == 3) ? cv::Scalar(0, 0, 255) : cv::Scalar(0, 0, 255, 255);
+        putText(showFrame, object.name, cv::Point(x1, y1 - 12), cv::FONT_HERSHEY_SIMPLEX, 0.5, text_color, 1, 0);
+
+        // Draw the mask
+        cv::Mat overlay;
+        if (channel == 3) {
+            overlay = cv::Mat(frameSize, CV_8UC3, cv::Scalar(0));
+        } else {
+            overlay = cv::Mat(frameSize, CV_8UC4, cv::Scalar(0, 0, 0, 0));
+        }
+
         cv::resize(mask, mask_full, cv::Size(width, height), 0, 0, cv::INTER_LINEAR);
-        crop_mask(mask_full, x1,y1,x2,y2);
+        crop_mask(mask_full, x1, y1, x2, y2);
+
       #ifdef TIME_TRACE_DEBUG
         printf("mask %dx%d\n", mask.cols, mask.rows);
         printf("overlay %dx%d\n", overlay.cols, overlay.rows);
       #endif
+
         auto pixel_color = COLORS[random_index(gen)];
         for (int r = 0; r < mask_full.rows; r++) {
-            for (int c = 0; c < mask_full.cols ; c++) {
+            for (int c = 0; c < mask_full.cols; c++) {
                 if (mask_full.at<float>(r, c) > 0.55) {
-                    overlay.at<cv::Vec3b>(r,c) = pixel_color;
+                    if (channel == 3) {
+                        overlay.at<cv::Vec3b>(r, c) = pixel_color;
+                    } else {
+                        overlay.at<cv::Vec4b>(r, c) = cv::Vec4b(pixel_color[0], pixel_color[1], pixel_color[2], 255);
+                    }
                 }
             }
         }
-        //std::stringstream ss;
-        //ss << "mask_" << i << ".bmp";
-        //std::string filename = ss.str();
-        //cv::imwrite(filename, overlay);
+
         cv::addWeighted(showFrame, 1, overlay, 0.5, 0.0, showFrame);
         overlay.release();
         mask_full.release();
     }
+
     _objects.clear();
     _objects.shrink_to_fit();
 }
+
 
 
