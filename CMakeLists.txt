@@ -28,7 +28,7 @@ include_directories(
 )
 
 add_subdirectory(src)
-if (BUILD_TESTS)
+if (BUILD_TESTER)
     enable_testing()
     add_subdirectory(tests)
 endif()

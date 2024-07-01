@@ -22,4 +22,4 @@ option(SHOW_LABEL "Enable show labels functionality" OFF)
 
 option(TIME_TRACE_DEBUG "Enable debugging and time tracking functionality" OFF)
 
-option(BUILD_TESTS "Build the test suite" OFF)
+option(BUILD_TESTER "Build the test suite" OFF)
