@@ -28,6 +28,14 @@ include_directories(
 )
 
 add_subdirectory(src)
+
+# Optionally, install the library and headers
+install(TARGETS NpuLibrary
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+install(DIRECTORY include/ DESTINATION include)
+install(FILES ${PROJECT_SOURCE_DIR}/common.cmake DESTINATION share/NpuLibrary)
+
 if (BUILD_TESTER)
     enable_testing()
     add_subdirectory(tests)
