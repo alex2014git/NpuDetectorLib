@@ -7,6 +7,7 @@
 #include <chrono>
 #include <iostream>
 #include <filesystem>
+#include <cstring>
 
 #define MAX_NAME_LEN 128
 
@@ -14,6 +15,8 @@ char input_file_name[MAX_NAME_LEN] = "input.mp4";
 char output_file_name[MAX_NAME_LEN] = "output.mp4";
 char model_json_path[MAX_NAME_LEN] = "models/yolov5s.json";
 char running_alg[MAX_NAME_LEN] = "yolov5";
+std::vector<std::string> model_json_paths;
+std::vector<std::string> running_algs;
 int frame_count = 1;
 int thread_count = 1;
 
@@ -50,12 +53,10 @@ void parse_args(int argc, char **argv)
             snprintf(output_file_name, MAX_NAME_LEN, "%s", optarg);
             break;
         case 'm':
-            memset(model_json_path, 0, MAX_NAME_LEN);
-            snprintf(model_json_path, MAX_NAME_LEN, "%s", optarg);
+            model_json_paths.push_back(optarg);
             break;
         case 'a':
-            memset(running_alg, 0, MAX_NAME_LEN);
-            snprintf(running_alg, MAX_NAME_LEN, "%s", optarg);
+            running_algs.push_back(optarg);
             break;
         case 'f':
             frame_count = atoi(optarg);
@@ -78,6 +79,19 @@ void parse_args(int argc, char **argv)
             printf("?? getopt returned character code 0%o ??\n", c);
         }
     }
+    if(model_json_paths.size() == 0) {
+        model_json_paths.push_back(model_json_path);
+    }
+    if(running_algs.size() == 0) {
+        running_algs.push_back(running_alg);
+    }
+    auto ensure_size = [](std::vector<std::string>& vec, int size) {
+        while (vec.size() < size) {
+            vec.push_back(vec.back());
+        }
+    };
+    ensure_size(model_json_paths, thread_count);
+    ensure_size(running_algs, thread_count);
 }
 
 void process_video(int thread_id, const std::string& input_file, const std::string& output_file, const std::string& model_file, const std::string& alg, int frame_cnt)
@@ -171,6 +185,7 @@ void process_image(int thread_id, const std::string& input_file, const std::stri
         imgData.data = (void*)frame.datastart;
         imgData.width = frame.cols;
         imgData.height = frame.rows;
+        imgData.ch = 3;
 
         npuBase->Detect(imgData, true);
         npuBase->DrawResult(imgData, false);
@@ -204,9 +219,9 @@ int main(int argc, char **argv) {
             thread_output_file.insert(thread_output_file.find_last_of('.'), "_" + std::to_string(i));
         }
         if (is_video) {
-            threads.emplace_back(process_video, i, input_file_name, thread_output_file, model_json_path, running_alg, frame_count);
+            threads.emplace_back(process_video, i, input_file_name, thread_output_file, model_json_paths[i], std::ref(running_algs[i]), frame_count);
         } else {
-            threads.emplace_back(process_image, i, input_file_name, thread_output_file, model_json_path, running_alg, frame_count);
+            threads.emplace_back(process_image, i, input_file_name, thread_output_file, model_json_paths[i], std::ref(running_algs[i]), frame_count);
         }
     }
 
