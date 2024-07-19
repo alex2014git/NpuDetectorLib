@@ -29,6 +29,13 @@ int NpuYolov8SegImpl::Initialize(std::string configJsonFile, int streamId)
     if (_dom.HasMember("yolo_nms_core") && _dom["yolo_nms_core"].IsBool()) {
         _nms_core = _dom["yolo_nms_core"].GetBool();
     }
+    if (_dom.HasMember("mask_size") && _dom["mask_size"].IsArray()) {
+        const rapidjson::Value& arr = _dom["mask_size"];
+        for (int i = 0; i < arr.Size(); ++i) {
+        if (arr[i].IsInt())
+            _mask_sizes.push_back(arr[i].GetInt());
+        }
+    }
     return InitNPU();
 }
 
@@ -51,7 +58,11 @@ int NpuYolov8SegImpl::Detect(image_share_t imgData, bool needPreProcess)
       //get my extra json parameter from the _dom.
       std::vector<int> strides = {_model_width/_feature_map_sizes[0], _model_width/_feature_map_sizes[1], _model_width/_feature_map_sizes[2]};
       std::vector<int> network_dims = {_model_width, _model_height};
-      _filtered_masks = filter_seg(roi, imgData.height, imgData.width, _nclasses, _labels, _conf_threshold, strides, network_dims);
+      if(needPreProcess) {
+          _filtered_masks = filter_seg(roi, imgData.height, imgData.width, _nclasses, _labels, _conf_threshold, strides, network_dims);
+      } else {
+          _filtered_masks = filter_seg(roi, _mask_sizes[1], _mask_sizes[0], _nclasses, _labels, _conf_threshold, strides, network_dims);
+      }
       std::vector<HailoDetectionPtr> detections = hailo_common::get_hailo_detections(roi);
       //cv::resize(frames[0], frames[0], cv::Size((int)org_width, (int)org_height), 1);
       for (auto &detection : detections) {
@@ -156,9 +167,6 @@ void NpuYolov8SegImpl::DrawResult(image_share_t imgData, bool needFormat)
         memset(showFrame.data, 0, width * height * channel);
     }
 
-    // DrawObject function call (if required)
-    // DrawObject(imgData, showFrame, max_dim, w_compen, h_compen);
-
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> random_index(0, COLORS.size() - 1);
@@ -169,17 +177,17 @@ void NpuYolov8SegImpl::DrawResult(image_share_t imgData, bool needFormat)
         const auto& mask = _filtered_masks[i];
 
         // Draw the objects
-        #ifdef LETTER_BOX
+      #ifdef LETTER_BOX
         x1 = object.x_min * float(max_dim) - w_compen;
         y1 = object.y_min * float(max_dim) - h_compen;
         x2 = object.x_max * float(max_dim) - w_compen;
         y2 = object.y_max * float(max_dim) - h_compen;
-        #else
+      #else
         x1 = object.x_min * width;
         y1 = object.y_min * height;
         x2 = object.x_max * width;
         y2 = object.y_max * height;
-        #endif
+      #endif
 
         cv::Scalar box_color = (channel == 3) ? cv::Scalar(0, 255, 0) : cv::Scalar(0, 255, 0, 255);
         rectangle(showFrame, cv::Point(x1, y1), cv::Point(x2, y2), box_color, 2);
@@ -194,12 +202,12 @@ void NpuYolov8SegImpl::DrawResult(image_share_t imgData, bool needFormat)
         } else {
             overlay = cv::Mat(frameSize, CV_8UC4, cv::Scalar(0, 0, 0, 0));
         }
-
         cv::resize(mask, mask_full, cv::Size(width, height), 0, 0, cv::INTER_LINEAR);
         crop_mask(mask_full, x1, y1, x2, y2);
 
       #ifdef TIME_TRACE_DEBUG
         printf("mask %dx%d\n", mask.cols, mask.rows);
+        printf("mask %dx%d\n", mask_full.cols, mask_full.rows);
         printf("overlay %dx%d\n", overlay.cols, overlay.rows);
       #endif
 
