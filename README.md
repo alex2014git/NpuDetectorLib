@@ -58,10 +58,10 @@ Example for checking the model performance:
 
 Example for loading the mp4 and saving it as mp4:
 ```sh
-./build/tests/TestExecutable -i VID.mp4 -o VID_out.mp4  -m models/yolov8s.json -a yolov8
+./build/tests/TestExecutable -i VID.mp4 -o VID_out.mp4  -m models/yolov8s_nms.json -a base
 ```
 
 Example for loading different model on different thread:
 ```sh
-./build/tests/TestExecutable -t 2 -m models/yolov5s.json -m models/yolov8s_seg.json -a yolov5 -a yolov8_seg
+./build/tests/TestExecutable -t 2 -m models/yolov8s_nms.json -m models/yolov8s_seg.json -a base -a yolov8_seg
 ```

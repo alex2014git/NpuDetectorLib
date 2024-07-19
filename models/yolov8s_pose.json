@@ -1,0 +1,14 @@
+{
+    "name": "yolov8s-pose",
+    "model_path": "models/yolov8s_pose.hef",
+    "classes": 1,
+    "feature_map_size": [80, 40, 20],
+    "labels": ["__background__", "person", "etc"],
+    "size": [640, 640, 3],
+    "threshold": 0.5,
+    "yolo_nms_core": false,
+    "output_order_by_name": ["yolov8s_pose/conv70", "yolov8s_pose/conv71", "yolov8s_pose/conv72", "yolov8s_pose/conv57", "yolov8s_pose/conv58", "yolov8s_pose/conv59", "yolov8s_pose/conv43", "yolov8s_pose/conv44", "yolov8s_pose/conv45"],
+    "out_quantized": true,
+    "out_format": "HAILO_FORMAT_TYPE_UINT8"
+}
+

@@ -19,6 +19,7 @@ public:
 
 protected:
     std::vector<int32_t> _feature_map_sizes;
+    std::vector<int32_t> _mask_sizes;
     std::vector<cv::Mat> _filtered_masks;
     cv::Mat crop_mask(cv::Mat& mask, int x_min, int y_min, int x_max, int y_max);
 };
