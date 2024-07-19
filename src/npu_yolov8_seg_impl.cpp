@@ -58,6 +58,8 @@ int NpuYolov8SegImpl::Detect(image_share_t imgData, bool needPreProcess)
       //get my extra json parameter from the _dom.
       std::vector<int> strides = {_model_width/_feature_map_sizes[0], _model_width/_feature_map_sizes[1], _model_width/_feature_map_sizes[2]};
       std::vector<int> network_dims = {_model_width, _model_height};
+      //if we do the preprocess here, we know the original size. if not, we need load the original size from the model json.default:1920x1080
+      //the key is the raio, not the size.
       if(needPreProcess) {
           _filtered_masks = filter_seg(roi, imgData.height, imgData.width, _nclasses, _labels, _conf_threshold, strides, network_dims);
       } else {
