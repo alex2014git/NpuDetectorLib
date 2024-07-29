@@ -23,6 +23,7 @@
 
 //#define TIME_TRACE_DEBUG
 //#define LETTER_BOX
+template MnpReturnCode NpuBaseImpl::NpuPorcessing<unsigned char>(image_share_t imgData, bool needPreProcess);
 
 hailo_format_type_t enumStr2Enum(const char* enumStr) {
     static const std::unordered_map<std::string, hailo_format_type_t> strToEnumMap = {
