@@ -137,31 +137,43 @@ void process_video(int thread_id, const std::string& input_file, const std::stri
     auto npuBase = NpuFactory::CreateNpu(Npu::str2AlgEnum(alg.c_str()));
     npuBase->Initialize(model_file, thread_id);
 
-    cv::VideoCapture cap(input_file);
+    // Check if the input is a camera device or a video file
+    bool is_camera = input_file.find("/dev/video") != std::string::npos;
+    cv::VideoCapture cap;
+
+    if (is_camera) {
+        cap.open(input_file, cv::CAP_V4L2);  // Use Video4Linux2 for cameras
+    } else {
+        cap.open(input_file, cv::CAP_FFMPEG);  // Use FFMPEG for video files
+    }
+
     if (!cap.isOpened()) {
         std::cerr << "Error opening video stream or file: " << input_file << std::endl;
         return;
     }
+
     int video_fps = cap.get(cv::CAP_PROP_FPS);
-    cap.set(cv::CAP_PROP_FRAME_COUNT, 0);
-    frame_cnt = cap.get(cv::CAP_PROP_FRAME_COUNT);
+    frame_cnt = (video_fps > 0) ? cap.get(cv::CAP_PROP_FRAME_COUNT) : 0;
 
     cv::VideoWriter writer;
-    int frame_width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
-    int frame_height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
-    int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
-    writer.open(output_file, codec, video_fps, cv::Size(frame_width, frame_height));
+    if (!is_camera) {
+        // Only open VideoWriter if not using camera
+        int frame_width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
+        int frame_height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+        int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
+        writer.open(output_file, codec, video_fps, cv::Size(frame_width, frame_height));
 
-    if (!writer.isOpened()) {
-        std::cerr << "Error opening video writer: " << output_file << std::endl;
-        return;
+        if (!writer.isOpened()) {
+            std::cerr << "Error opening video writer: " << output_file << std::endl;
+            return;
+        }
     }
 
     cv::Mat frame;
     int processed_frames = 0;
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    while (cap.read(frame) && (frame_cnt == 0 || processed_frames < frame_cnt)) {
+    while (cap.read(frame) && (is_camera || (frame_cnt == 0) || (processed_frames < frame_cnt))) {
         image_share_t imgData;
         imgData.data = (void*)frame.datastart;
         imgData.width = frame.cols;
@@ -171,7 +183,16 @@ void process_video(int thread_id, const std::string& input_file, const std::stri
         npuBase->Detect(imgData, true);
         npuBase->DrawResult(imgData, false);
 
-        writer.write(frame);
+        if (writer.isOpened()) {
+            writer.write(frame);
+        }
+
+        // Show the frame if it's from a camera
+        if (is_camera) {
+            cv::imshow("Processed Camera Feed", frame);
+            if (cv::waitKey(30) >= 0) break;  // Exit if any key is pressed
+        }
+
         processed_frames++;
     }
 
@@ -186,8 +207,11 @@ void process_video(int thread_id, const std::string& input_file, const std::stri
     }
 
     cap.release();
-    writer.release();
+    if (writer.isOpened()) {
+        writer.release();
+    }
 }
+
 
 std::string ensure_jpg_extension(const std::string& filename) {
   std::string output_image_file = filename;
@@ -249,7 +273,7 @@ int main(int argc, char **argv) {
     parse_args(argc, argv);
 
     std::vector<std::thread> threads;
-    bool is_video = (std::string(input_file_name).find(".mp4") != std::string::npos);
+    bool is_video = (std::string(input_file_name).find(".jpg") == std::string::npos);
 
     for (int i = 0; i < thread_count; ++i) {
         std::string thread_output_file = output_file_name;
@@ -266,6 +290,6 @@ int main(int argc, char **argv) {
     for (auto& t : threads) {
         t.join();
     }
-
+    cv::destroyAllWindows();  // Close all OpenCV windows
     return 0;
 }
