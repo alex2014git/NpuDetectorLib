@@ -26,7 +26,7 @@ include_directories(
     #${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/include
     ${HAILORT_INCLUDE}
-    #${OpenCV_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
 )
 
 # Add source files
@@ -46,7 +46,13 @@ target_link_libraries(NpuLibrary
     Threads::Threads
 )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+if (WIN32)
+    target_compile_definitions( NpuLibrary PRIVATE NOMINMAX)
+    target_compile_definitions( NpuLibrary PRIVATE WIN32_LEAN_AND_MEAN)
+    set_target_properties(NpuLibrary PROPERTIES COMPILE_FLAGS "/MD")
+else ()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+endif()
 
 # Add compile definitions based on options
 if (LETTER_BOX)

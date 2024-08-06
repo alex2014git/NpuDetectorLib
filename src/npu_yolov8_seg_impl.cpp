@@ -1,10 +1,12 @@
-#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <chrono>
 #include <random>
+#ifndef _WIN32
+#include <dlfcn.h>
 #include <sys/time.h>
+#endif
 #include "npu_yolov8_seg_impl.hpp"
 #include "common/hailo_objects.hpp"
 #include "yolov8seg_postprocess.hpp"

@@ -1,13 +1,17 @@
 #include "npu_factory.hpp"
 #include <opencv2/opencv.hpp>
-#include <getopt.h>
 #include <thread>
 #include <vector>
 #include <mutex>
 #include <chrono>
 #include <iostream>
-#include <filesystem>
 #include <cstring>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <getopt.h>
+#include <filesystem>
+#endif
 
 #define MAX_NAME_LEN 128
 
@@ -24,6 +28,39 @@ std::mutex mtx;
 
 void parse_args(int argc, char **argv)
 {
+#ifdef _WIN32
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--input_file_name" && i + 1 < argc) {
+            strncpy(input_file_name, argv[++i], MAX_NAME_LEN);
+        }
+        else if (arg == "--output_file_name" && i + 1 < argc) {
+            strncpy(output_file_name, argv[++i], MAX_NAME_LEN);
+        }
+        else if (arg == "--model_json_file" && i + 1 < argc) {
+            model_json_paths.push_back(argv[++i]);
+        }
+        else if (arg == "--running_alg" && i + 1 < argc) {
+            running_algs.push_back(argv[++i]);
+        }
+        else if (arg == "--frame_count" && i + 1 < argc) {
+            frame_count = atoi(argv[++i]);
+        }
+        else if (arg == "--thread_count" && i + 1 < argc) {
+            thread_count = atoi(argv[++i]);
+        }
+        else if (arg == "--help" || arg == "-h") {
+            std::cout << "Usage: " << argv[0] << "\n"
+                << " -i  input file name (default: input.mp4)\n"
+                << " -o  output file name (default: output.mp4)\n"
+                << " -m  model json file path (default: yolov5s.json)\n"
+                << " -a  running alg: base, yolov5, yolov8, yolov8_pose, yolov8_seg (default: yolov5)\n"
+                << " -f  frame count (default: 1)\n"
+                << " -t  thread count (default: 1)\n";
+            exit(0);
+        }
+    }
+#else
     int c;
     optind = 0;
     while (1) {
@@ -79,10 +116,11 @@ void parse_args(int argc, char **argv)
             printf("?? getopt returned character code 0%o ??\n", c);
         }
     }
-    if(model_json_paths.size() == 0) {
+#endif
+    if(model_json_paths.empty()) {
         model_json_paths.push_back(model_json_path);
     }
-    if(running_algs.size() == 0) {
+    if(running_algs.empty()) {
         running_algs.push_back(running_alg);
     }
     auto ensure_size = [](std::vector<std::string>& vec, int size) {
@@ -211,7 +249,7 @@ int main(int argc, char **argv) {
     parse_args(argc, argv);
 
     std::vector<std::thread> threads;
-    bool is_video = (std::filesystem::path(input_file_name).extension() == ".mp4");
+    bool is_video = (std::string(input_file_name).find(".mp4") != std::string::npos);
 
     for (int i = 0; i < thread_count; ++i) {
         std::string thread_output_file = output_file_name;

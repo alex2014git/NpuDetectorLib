@@ -1,9 +1,11 @@
-#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <chrono>
+#ifndef _WIN32
+#include <dlfcn.h>
 #include <sys/time.h>
+#endif
 
 #include <iostream>
 #include <fstream>

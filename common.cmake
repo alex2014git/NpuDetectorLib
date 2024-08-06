@@ -16,6 +16,13 @@ if (NOT DEFINED HAILORT_LIB)
     endif (UNIX)
 endif ()
 
+if (WIN32)
+    set(OpenCV_DIR "C:/opencv/build/x64/vc16/lib")
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    #add_definitions(-DWIN32_PLATFORM)
+elseif (UNIX)
+    #add_definitions(-DUNIX_PLATFORM)
+endif ()
 option(LETTER_BOX "Enable letterboxing functionality" ON)
 
 option(SHOW_LABEL "Enable show labels functionality" OFF)

@@ -7,4 +7,8 @@ target_link_libraries(TestExecutable
     Threads::Threads
     NpuLibrary
 )
+if (WIN32)
+    target_link_directories(TestExecutable PRIVATE ${PROJECT_BINARY_DIR}/lib)
+    set_target_properties(TestExecutable PROPERTIES COMPILE_FLAGS "/MD")
+endif()
 add_test(NAME MyTest COMMAND TestExecutable)
