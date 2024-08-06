@@ -13,6 +13,10 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+typedef unsigned int uint;
+#endif
+
 class HailoTensor
 {
 private:

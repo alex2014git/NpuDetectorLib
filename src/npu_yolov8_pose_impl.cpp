@@ -1,9 +1,11 @@
-#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <chrono>
+#ifndef _WIN32
+#include <dlfcn.h>
 #include <sys/time.h>
+#endif
 #include "npu_yolov8_pose_impl.hpp"
 #include "common/hailo_objects.hpp"
 #include "yolov8pose_postprocess.hpp"

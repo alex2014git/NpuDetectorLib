@@ -65,3 +65,8 @@ Example for loading different model on different thread:
 ```sh
 ./build/tests/TestExecutable -t 2 -m models/yolov8s_nms.json -m models/yolov8s_seg.json -a base -a yolov8_seg
 ```
+
+Example for using the usb camera(only support one stream):
+```sh
+./build/tests/TestExecutable -i /dev/video0  -m models/yolov8s_pose.json -a yolov8_pose
+```

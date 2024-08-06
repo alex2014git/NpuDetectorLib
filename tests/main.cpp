@@ -1,13 +1,17 @@
 #include "npu_factory.hpp"
 #include <opencv2/opencv.hpp>
-#include <getopt.h>
 #include <thread>
 #include <vector>
 #include <mutex>
 #include <chrono>
 #include <iostream>
-#include <filesystem>
 #include <cstring>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <getopt.h>
+#include <filesystem>
+#endif
 
 #define MAX_NAME_LEN 128
 
@@ -24,6 +28,39 @@ std::mutex mtx;
 
 void parse_args(int argc, char **argv)
 {
+#ifdef _WIN32
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-i" && i + 1 < argc) {
+            strncpy(input_file_name, argv[++i], MAX_NAME_LEN);
+        }
+        else if (arg == "-o" && i + 1 < argc) {
+            strncpy(output_file_name, argv[++i], MAX_NAME_LEN);
+        }
+        else if (arg == "-m" && i + 1 < argc) {
+            model_json_paths.push_back(argv[++i]);
+        }
+        else if (arg == "-a" && i + 1 < argc) {
+            running_algs.push_back(argv[++i]);
+        }
+        else if (arg == "-f" && i + 1 < argc) {
+            frame_count = atoi(argv[++i]);
+        }
+        else if (arg == "-t" && i + 1 < argc) {
+            thread_count = atoi(argv[++i]);
+        }
+        else if (arg == "--help" || arg == "-h") {
+            std::cout << "Usage: " << argv[0] << "\n"
+                << " -i  input file name (default: input.mp4)\n"
+                << " -o  output file name (default: output.mp4)\n"
+                << " -m  model json file path (default: yolov5s.json)\n"
+                << " -a  running alg: base, yolov5, yolov8, yolov8_pose, yolov8_seg (default: yolov5)\n"
+                << " -f  frame count (default: 1)\n"
+                << " -t  thread count (default: 1)\n";
+            exit(0);
+        }
+    }
+#else
     int c;
     optind = 0;
     while (1) {
@@ -79,10 +116,11 @@ void parse_args(int argc, char **argv)
             printf("?? getopt returned character code 0%o ??\n", c);
         }
     }
-    if(model_json_paths.size() == 0) {
+#endif
+    if(model_json_paths.empty()) {
         model_json_paths.push_back(model_json_path);
     }
-    if(running_algs.size() == 0) {
+    if(running_algs.empty()) {
         running_algs.push_back(running_alg);
     }
     auto ensure_size = [](std::vector<std::string>& vec, int size) {
@@ -99,31 +137,43 @@ void process_video(int thread_id, const std::string& input_file, const std::stri
     auto npuBase = NpuFactory::CreateNpu(Npu::str2AlgEnum(alg.c_str()));
     npuBase->Initialize(model_file, thread_id);
 
-    cv::VideoCapture cap(input_file);
+    // Check if the input is a camera device or a video file
+    bool is_camera = input_file.find("/dev/video") != std::string::npos;
+    cv::VideoCapture cap;
+
+    if (is_camera) {
+        cap.open(input_file, cv::CAP_V4L2);  // Use Video4Linux2 for cameras
+    } else {
+        cap.open(input_file, cv::CAP_FFMPEG);  // Use FFMPEG for video files
+    }
+
     if (!cap.isOpened()) {
         std::cerr << "Error opening video stream or file: " << input_file << std::endl;
         return;
     }
+
     int video_fps = cap.get(cv::CAP_PROP_FPS);
-    cap.set(cv::CAP_PROP_FRAME_COUNT, 0);
-    frame_cnt = cap.get(cv::CAP_PROP_FRAME_COUNT);
+    frame_cnt = (video_fps > 0) ? cap.get(cv::CAP_PROP_FRAME_COUNT) : 0;
 
     cv::VideoWriter writer;
-    int frame_width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
-    int frame_height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
-    int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
-    writer.open(output_file, codec, video_fps, cv::Size(frame_width, frame_height));
+    if (!is_camera) {
+        // Only open VideoWriter if not using camera
+        int frame_width = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_WIDTH));
+        int frame_height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
+        int codec = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
+        writer.open(output_file, codec, video_fps, cv::Size(frame_width, frame_height));
 
-    if (!writer.isOpened()) {
-        std::cerr << "Error opening video writer: " << output_file << std::endl;
-        return;
+        if (!writer.isOpened()) {
+            std::cerr << "Error opening video writer: " << output_file << std::endl;
+            return;
+        }
     }
 
     cv::Mat frame;
     int processed_frames = 0;
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    while (cap.read(frame) && (frame_cnt == 0 || processed_frames < frame_cnt)) {
+    while (cap.read(frame) && (is_camera || (frame_cnt == 0) || (processed_frames < frame_cnt))) {
         image_share_t imgData;
         imgData.data = (void*)frame.datastart;
         imgData.width = frame.cols;
@@ -133,7 +183,16 @@ void process_video(int thread_id, const std::string& input_file, const std::stri
         npuBase->Detect(imgData, true);
         npuBase->DrawResult(imgData, false);
 
-        writer.write(frame);
+        if (writer.isOpened()) {
+            writer.write(frame);
+        }
+
+        // Show the frame if it's from a camera
+        if (is_camera) {
+            cv::imshow("Processed Camera Feed", frame);
+            if (cv::waitKey(30) >= 0) break;  // Exit if any key is pressed
+        }
+
         processed_frames++;
     }
 
@@ -148,8 +207,11 @@ void process_video(int thread_id, const std::string& input_file, const std::stri
     }
 
     cap.release();
-    writer.release();
+    if (writer.isOpened()) {
+        writer.release();
+    }
 }
+
 
 std::string ensure_jpg_extension(const std::string& filename) {
   std::string output_image_file = filename;
@@ -211,7 +273,7 @@ int main(int argc, char **argv) {
     parse_args(argc, argv);
 
     std::vector<std::thread> threads;
-    bool is_video = (std::filesystem::path(input_file_name).extension() == ".mp4");
+    bool is_video = (std::string(input_file_name).find(".jpg") == std::string::npos);
 
     for (int i = 0; i < thread_count; ++i) {
         std::string thread_output_file = output_file_name;
@@ -228,6 +290,6 @@ int main(int argc, char **argv) {
     for (auto& t : threads) {
         t.join();
     }
-
+    cv::destroyAllWindows();  // Close all OpenCV windows
     return 0;
 }
