@@ -31,22 +31,22 @@ void parse_args(int argc, char **argv)
 #ifdef _WIN32
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--input_file_name" && i + 1 < argc) {
+        if (arg == "-i" && i + 1 < argc) {
             strncpy(input_file_name, argv[++i], MAX_NAME_LEN);
         }
-        else if (arg == "--output_file_name" && i + 1 < argc) {
+        else if (arg == "-o" && i + 1 < argc) {
             strncpy(output_file_name, argv[++i], MAX_NAME_LEN);
         }
-        else if (arg == "--model_json_file" && i + 1 < argc) {
+        else if (arg == "-m" && i + 1 < argc) {
             model_json_paths.push_back(argv[++i]);
         }
-        else if (arg == "--running_alg" && i + 1 < argc) {
+        else if (arg == "-a" && i + 1 < argc) {
             running_algs.push_back(argv[++i]);
         }
-        else if (arg == "--frame_count" && i + 1 < argc) {
+        else if (arg == "-f" && i + 1 < argc) {
             frame_count = atoi(argv[++i]);
         }
-        else if (arg == "--thread_count" && i + 1 < argc) {
+        else if (arg == "-t" && i + 1 < argc) {
             thread_count = atoi(argv[++i]);
         }
         else if (arg == "--help" || arg == "-h") {

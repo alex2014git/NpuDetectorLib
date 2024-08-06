@@ -36,8 +36,8 @@ struct Decodings {
 };
 
 
-__BEGIN_DECLS
+//__BEGIN_DECLS
 std::pair<std::vector<KeyPt>, std::vector<PairPairs>> filter(HailoROIPtr roi, float conf_thr,
                            std::vector<int> strides,
                            std::vector<int> network_dims);
-__END_DECLS
+//__END_DECLS
