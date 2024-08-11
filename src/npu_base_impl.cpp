@@ -185,30 +185,33 @@ int NpuBaseImpl::InitNPU()
     return 0;
 }
 
-cv::Mat NpuBaseImpl::Letterbox( const cv::Mat& img, int target_width, float &ratio, int color = 114 )
+cv::Mat NpuBaseImpl::Letterbox(const cv::Mat& img, int target_width, int target_height, float &ratio, int color = 114)
 {
     int width = img.cols;
     int height = img.rows;
 
-    cv::Mat square( target_width, target_width, img.type(), cv::Scalar(color, color, color) );
-    int max_dim = ( width >= height ) ? width : height;
-    float32_t scale = ( ( float32_t ) target_width ) / max_dim;
-    cv::Rect roi;
-    if (width >= height) {
-        roi.width = target_width;
-        roi.x = 0;
-        roi.height = height * scale;
-        roi.y = ( target_width - roi.height ) / 2;
-    } else {
-        roi.y = 0;
-        roi.height = target_width;
-        roi.width = width * scale;
-        roi.x = ( target_width - roi.width ) / 2;
-    }
+    // Create a new image with the target dimensions
+    cv::Mat letterbox(target_height, target_width, img.type(), cv::Scalar(color, color, color));
+
+    // Calculate the scale ratio and new dimensions
+    float scale = std::min(float(target_width) / width, float(target_height) / height);
+    int new_width = std::round(width * scale);
+    int new_height = std::round(height * scale);
+
+    // Calculate the ROI for placing the resized image in the center of the letterbox
+    int x_offset = (target_width - new_width) / 2;
+    int y_offset = (target_height - new_height) / 2;
+    cv::Rect roi(x_offset, y_offset, new_width, new_height);
+
+    // Resize the image and place it into the letterbox image
+    cv::Mat resized_img;
+    cv::resize(img, resized_img, cv::Size(new_width, new_height));
+    resized_img.copyTo(letterbox(roi));
+
     ratio = 1.0 / scale;
-    cv::resize( img, square( roi ), roi.size() );
-    return square;
+    return letterbox;
 }
+
 
 void NpuBaseImpl::PreProcessing(cv::Mat &oriFrame, bool needPreProcess, cv::Mat &outFrame, float &ratio)
 {
@@ -219,7 +222,7 @@ void NpuBaseImpl::PreProcessing(cv::Mat &oriFrame, bool needPreProcess, cv::Mat 
     }
 
 #ifdef LETTER_BOX
-    tmp = Letterbox(oriFrame, _model_height, ratio, 144);
+    tmp = Letterbox(oriFrame, _model_width, _model_height, ratio, 144);
 #else
     cv::resize( oriFrame, tmp, cv::Size(_model_width, _model_height));
 #endif
@@ -235,17 +238,18 @@ void NpuBaseImpl::PreProcessing(cv::Mat &oriFrame, bool needPreProcess, cv::Mat 
         printf("BGR to NV12\n");
       #endif
     }
+    //cv::imwrite("tmp.jpg", outFrame);
 }
 
-void NpuBaseImpl::DrawObject(image_share_t imgData, cv::Mat &showFrame, int max_dim, int w_compen, int h_compen)
+void NpuBaseImpl::DrawObject(image_share_t imgData, cv::Mat &showFrame, int new_width, int new_height, int w_compen, int h_compen)
 {
     int x1, y1, x2, y2;
     for (const auto& object : _objects) {
       #ifdef LETTER_BOX
-        x1 = object.x_min * float(max_dim) - w_compen;
-        y1 = object.y_min * float(max_dim) - h_compen;
-        x2 = object.x_max * float(max_dim) - w_compen;
-        y2 = object.y_max * float(max_dim) - h_compen;
+        x1 = object.x_min * float(new_width) - w_compen;
+        y1 = object.y_min * float(new_height) - h_compen;
+        x2 = object.x_max * float(new_width) - w_compen;
+        y2 = object.y_max * float(new_height) - h_compen;
       #else
         x1 = object.x_min * showFrame.cols;
         y1 = object.y_min * showFrame.rows;
@@ -354,6 +358,8 @@ int NpuBaseImpl::Detect(image_share_t imgData, bool needPreProcess)
     MnpReturnCode ReadOutRet = MnpReturnCode::NO_DATA_AVAILABLE;
     std::vector<float32_t> detectionsResult;
     int class_id = 1;
+    _objects.clear();
+    _objects.shrink_to_fit();
 
     ReadOutRet = NpuPorcessing<uint8_t>(imgData, needPreProcess);
     if (ReadOutRet == MnpReturnCode::SUCCESS)
@@ -451,9 +457,12 @@ void NpuBaseImpl::DrawResult(image_share_t imgData, bool needFormat)
     int width = imgData.width;
     int height = imgData.height;
     int channel = imgData.ch;
-    int max_dim = ( width >= height ) ? width : height;
-    int w_compen = ( width >= height ) ? 0 : ((height - width) / 2);
-    int h_compen = ( width >= height ) ? ((width - height) / 2) : 0;
+    float scale = std::min(float(_model_width) / width, float(_model_height) / height);
+    int new_width = std::round(_model_width / scale);
+    int new_height = std::round(_model_height / scale);
+    //int max_dim = ( width >= height ) ? width : height;
+    int w_compen = (new_width - width) / 2; //( width >= height ) ? 0 : ((height - width) / 2);
+    int h_compen = (new_height - height) / 2; //( width >= height ) ? ((width - height) / 2) : 0;
     cv::Mat showFrame;
     cv::Size frameSize(width, height);  // Create cv::Size object
     if((channel == 0) || (channel == 3)) {
@@ -464,7 +473,7 @@ void NpuBaseImpl::DrawResult(image_share_t imgData, bool needFormat)
     if(needFormat) {
         memset(showFrame.data, 0, width * height * channel);
     }
-    DrawObject(imgData, showFrame, max_dim, w_compen, h_compen);
+    DrawObject(imgData, showFrame, new_width, new_height, w_compen, h_compen);
 }
 
 void NpuBaseImpl::Release(void)

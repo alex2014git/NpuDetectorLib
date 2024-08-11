@@ -64,13 +64,13 @@ protected:
     struct timeval _start_time, _stop_time;
 
 private:
-    cv::Mat Letterbox( const cv::Mat& img, int target_width, float &ratio, int color);
+    cv::Mat Letterbox( const cv::Mat& img, int target_width, int target_height, float &ratio, int color);
     void PreProcessing(cv::Mat &org_frame, bool needPreProcess, cv::Mat &out_frame, float &ratio);
 
 protected:
     int InitNPU();
     int InitConfig(std::string configJsonFile, int streamId);
-    void DrawObject(image_share_t imgData, cv::Mat &showFrame, int max_dim, int w_compen, int h_compen);
+    void DrawObject(image_share_t imgData, cv::Mat &showFrame, int new_width, int new_height, int w_compen, int h_compen);
     template <typename T>
     MnpReturnCode NpuPorcessing(image_share_t imgData, bool needPreProcess);
     std::string GetFinalLabel(float conf, std::string label);

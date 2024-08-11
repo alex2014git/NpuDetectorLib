@@ -150,9 +150,12 @@ void NpuYolov8SegImpl::DrawResult(image_share_t imgData, bool needFormat)
     int width = imgData.width;
     int height = imgData.height;
     int channel = imgData.ch;
-    int max_dim = (width >= height) ? width : height;
-    int w_compen = (width >= height) ? 0 : ((height - width) / 2);
-    int h_compen = (width >= height) ? ((width - height) / 2) : 0;
+    float scale = std::min(float(_model_width) / width, float(_model_height) / height);
+    int new_width = std::round(_model_width / scale);
+    int new_height = std::round(_model_height / scale);
+    //int max_dim = ( width >= height ) ? width : height;
+    int w_compen = (new_width - width) / 2; //( width >= height ) ? 0 : ((height - width) / 2);
+    int h_compen = (new_height - height) / 2; //( width >= height ) ? ((width - height) / 2) : 0;
     cv::Mat showFrame;
     cv::Size frameSize(width, height);  // Create cv::Size object
 
@@ -182,10 +185,10 @@ void NpuYolov8SegImpl::DrawResult(image_share_t imgData, bool needFormat)
 
         // Draw the objects
       #ifdef LETTER_BOX
-        x1 = object.x_min * float(max_dim) - w_compen;
-        y1 = object.y_min * float(max_dim) - h_compen;
-        x2 = object.x_max * float(max_dim) - w_compen;
-        y2 = object.y_max * float(max_dim) - h_compen;
+        x1 = object.x_min * float(new_width) - w_compen;
+        y1 = object.y_min * float(new_height) - h_compen;
+        x2 = object.x_max * float(new_width) - w_compen;
+        y2 = object.y_max * float(new_height) - h_compen;
       #else
         x1 = object.x_min * width;
         y1 = object.y_min * height;
