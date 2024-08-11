@@ -100,9 +100,12 @@ void NpuYolov8PoseImpl::DrawResult(image_share_t imgData, bool needFormat)
     int width = imgData.width;
     int height = imgData.height;
     int channel = imgData.ch;
-    int max_dim = ( width >= height ) ? width : height;
-    int w_compen = ( width >= height ) ? 0 : ((height - width) / 2);
-    int h_compen = ( width >= height ) ? ((width - height) / 2) : 0;
+    float scale = std::min(float(_model_width) / width, float(_model_height) / height);
+    int new_width = std::round(_model_width / scale);
+    int new_height = std::round(_model_height / scale);
+    //int max_dim = ( width >= height ) ? width : height;
+    int w_compen = (new_width - width) / 2; //( width >= height ) ? 0 : ((height - width) / 2);
+    int h_compen = (new_height - height) / 2; //( width >= height ) ? ((width - height) / 2) : 0;
     cv::Mat showFrame;
     cv::Size frameSize(width, height);  // Create cv::Size object
     if((channel == 0) || (channel == 3)) {
@@ -114,11 +117,11 @@ void NpuYolov8PoseImpl::DrawResult(image_share_t imgData, bool needFormat)
         memset(showFrame.data, 0, width * height * channel);
     }
 
-    DrawObject(imgData, showFrame, max_dim, w_compen, h_compen);
+    DrawObject(imgData, showFrame, new_width, new_height, w_compen, h_compen);
     for (auto &keypoint : _pose_extra.first){
       #ifdef LETTER_BOX
-        x1 = keypoint.xs * float(max_dim) - w_compen;
-        y1 = keypoint.ys * float(max_dim) - h_compen;
+        x1 = keypoint.xs * float(new_width) - w_compen;
+        y1 = keypoint.ys * float(new_height) - h_compen;
       #else
         x1 = keypoint.xs * showFrame.cols;
         y1 = keypoint.ys * showFrame.rows;
@@ -127,10 +130,10 @@ void NpuYolov8PoseImpl::DrawResult(image_share_t imgData, bool needFormat)
     }
     for (PairPairs &p : _pose_extra.second){
       #ifdef LETTER_BOX
-        x1 = p.pt1.first * float(max_dim) - w_compen;
-        y1 = p.pt1.second * float(max_dim) - h_compen;
-        x2 = p.pt2.first * float(max_dim) - w_compen;
-        y2 = p.pt2.second * float(max_dim) - h_compen;
+        x1 = p.pt1.first * float(new_width) - w_compen;
+        y1 = p.pt1.second * float(new_height) - h_compen;
+        x2 = p.pt2.first * float(new_width) - w_compen;
+        y2 = p.pt2.second * float(new_height) - h_compen;
       #else
         x1 = p.pt1.first * showFrame.cols;
         y1 = p.pt1.second * showFrame.rows;
