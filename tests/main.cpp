@@ -249,8 +249,8 @@ void process_image(int thread_id, const std::string& input_file, const std::stri
         imgData.height = frame.rows;
         imgData.ch = 3;
 
-        npuBase->Detect(imgData, true);
-        npuBase->DrawResult(imgData, false);
+        npuBase->Detect(imgData, false);
+        //npuBase->DrawResult(imgData, false);
 
         processed_frames++;
     }
