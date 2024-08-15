@@ -258,11 +258,12 @@ void process_image(int thread_id, const std::string& input_file, const std::stri
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end_time - start_time;
     double fps = processed_frames / duration.count();
+    double latency = (duration.count() / processed_frames) * 1000;
 
     {
         std::lock_guard<std::mutex> lock(mtx);
         std::cout << "Thread " << thread_id << " processed " << processed_frames << " frames in "
-                  << duration.count() << " seconds. FPS: " << fps << std::endl;
+                  << duration.count() << " seconds. FPS: " << fps << " Latency: " << latency << std::endl;
     }
 
     std::string output_image_file = ensure_jpg_extension(output_file);
