@@ -23,6 +23,8 @@ std::vector<std::string> model_json_paths;
 std::vector<std::string> running_algs;
 int frame_count = 1;
 int thread_count = 1;
+bool is_folder = false;
+std::string folder_path;
 
 std::mutex mtx;
 
@@ -33,6 +35,11 @@ void parse_args(int argc, char **argv)
         std::string arg = argv[i];
         if (arg == "-i" && i + 1 < argc) {
             strncpy(input_file_name, argv[++i], MAX_NAME_LEN);
+            is_folder = std::filesystem::is_directory(input_file_name);
+            if (is_folder) {
+                folder_path = input_file_name;
+                continue;
+            }
         }
         else if (arg == "-o" && i + 1 < argc) {
             strncpy(output_file_name, argv[++i], MAX_NAME_LEN);
@@ -84,6 +91,11 @@ void parse_args(int argc, char **argv)
         case 'i':
             memset(input_file_name, 0, MAX_NAME_LEN);
             snprintf(input_file_name, MAX_NAME_LEN, "%s", optarg);
+            is_folder = std::filesystem::is_directory(input_file_name);
+            if (is_folder) {
+                folder_path = input_file_name;
+                continue;
+            }
             break;
         case 'o':
             memset(output_file_name, 0, MAX_NAME_LEN);
@@ -269,12 +281,51 @@ void process_image(int thread_id, const std::string& input_file, const std::stri
     cv::imwrite(output_image_file, frame);
 }
 
+bool is_supported_image_format(const std::string &input_file_name) {
+    // OpenCV 支持的常见图片格式
+    std::vector<std::string> supported_formats = {
+        ".jpg", ".jpeg", ".png", ".bmp"
+    };
+
+    // 检查文件名是否以这些格式中的任何一个结尾
+    return std::any_of(supported_formats.begin(), supported_formats.end(), 
+        [&input_file_name](const std::string &ext) {
+            return input_file_name.size() >= ext.size() &&
+                   input_file_name.compare(input_file_name.size() - ext.size(), ext.size(), ext) == 0;
+        });
+}
+
+int simulate_folder(const std::string folder_path) {
+    std::vector<std::string> input_files;
+    std::vector<std::string> output_files;
+
+    for (const auto &entry : std::filesystem::directory_iterator(folder_path)) {
+        if (entry.is_regular_file()) {
+            std::string file_path = entry.path().string();
+            if (is_supported_image_format(file_path)) {
+                input_files.push_back(file_path);
+                output_files.push_back(file_path.insert(file_path.find_last_of('.'), "_out"));
+            }
+        }
+    }
+    // process all the images
+    for (size_t i = 0; i < input_files.size(); ++i) {
+        std::cout << "Processing: " << input_files[i] << " -> " << output_files[i] << std::endl;
+        // 在这里添加处理文件的代码
+        process_image(0, input_files[i], output_files[i], model_json_paths[0], std::ref(running_algs[0]), 1);
+    }
+    return 0;
+}
+
 int main(int argc, char **argv) {
     parse_args(argc, argv);
-
     std::vector<std::thread> threads;
-    bool is_video = (std::string(input_file_name).find(".jpg") == std::string::npos);
 
+    if (is_folder) {
+        return simulate_folder(folder_path);
+    }
+
+    bool is_video = (!is_supported_image_format(input_file_name));
     for (int i = 0; i < thread_count; ++i) {
         std::string thread_output_file = output_file_name;
         if (thread_count > 1) {

@@ -43,7 +43,7 @@ size_t NpuYoloImpl::GetDetectionsYolo(std::vector<uint8_t> &fm1, std::vector<uin
 
 size_t NpuYoloImpl::YoloPostProcessing(std::vector<std::vector<uint8_t>>& inferOutResult, std::vector<qp_zp_scale_t> &quantizationInfo, std::vector<float32_t>& detectionsResult)
 {
-    return GetDetectionsYolo(inferOutResult[0], inferOutResult[1], inferOutResult[2], quantizationInfo, 0.4, detectionsResult);
+    return GetDetectionsYolo(inferOutResult[0], inferOutResult[1], inferOutResult[2], quantizationInfo, _conf_threshold, detectionsResult);
 }
 
 int NpuYoloImpl::Initialize(std::string configJsonFile, int streamId)
