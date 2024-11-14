@@ -9,9 +9,14 @@ project(NpuLibrary VERSION 2.0.0)
 # Include common macros and definitions
 include(${PROJECT_SOURCE_DIR}/common.cmake)
 
+# Enable pkg-config support
+find_package(PkgConfig REQUIRED)
+
+# Use pkg-config to get the OpenCV flags
+pkg_check_modules(OpenCV REQUIRED opencv4)
 # Find required packages
 find_package(Threads REQUIRED)
-find_package(OpenCV REQUIRED)
+#find_package(OpenCV REQUIRED)
 message("HAILORT_INCLUDE: ${HAILORT_INCLUDE}")
 message("HAILORT_LIB value: ${HAILORT_LIB}")
 message("OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
