@@ -18,7 +18,7 @@
 char input_file_name[MAX_NAME_LEN] = "input.mp4";
 char output_file_name[MAX_NAME_LEN] = "output.mp4";
 char model_json_path[MAX_NAME_LEN] = "models/yolov5s.json";
-char running_alg[MAX_NAME_LEN] = "yolov5";
+char running_alg[MAX_NAME_LEN] = "base";
 std::vector<std::string> model_json_paths;
 std::vector<std::string> running_algs;
 int frame_count = 1;
@@ -61,7 +61,7 @@ void parse_args(int argc, char **argv)
                 << " -i  input file name (default: input.mp4)\n"
                 << " -o  output file name (default: output.mp4)\n"
                 << " -m  model json file path (default: yolov5s.json)\n"
-                << " -a  running alg: base, yolov5, yolov8, yolov8_pose, yolov8_seg (default: yolov5)\n"
+                << " -a  running alg: base, yolov8_pose, yolov8_seg (default: base)\n"
                 << " -f  frame count (default: 1)\n"
                 << " -t  thread count (default: 1)\n";
             exit(0);
@@ -119,7 +119,7 @@ void parse_args(int argc, char **argv)
                    " -i  input file name (default: input.mp4)\n"
                    " -o  output file name (default: output.mp4)\n"
                    " -m  model json file path (default: yolov5s.json)\n"
-                   " -a  running alg: base, yolov5, yolov8, yolov8_pose, yolov8_seg (default: yolov5)\n"
+                   " -a  running alg: base, yolov8_pose, yolov8_seg (default: base)\n"
                    " -f  frame count (default: 1)\n"
                    " -t  thread count (default: 1)\n",
                    argv[0]);

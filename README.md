@@ -46,14 +46,14 @@ Usage: ./build/tests/TestExecutable
  -i  input file name (default: input.mp4)
  -o  output file name (default: output.mp4)
  -m  model json file path (default: yolov5s.json)
- -a  running alg: base, yolov5, yolov8, yolov8_pose, yolov8_seg (default: yolov5)
+ -a  running alg: base, yolov8_pose, yolov8_seg (default: base)
  -f  frame count (default: 1)
  -t  thread count (default: 1)
 ```
 
 Example for checking the model performance:
 ```sh
-./build/tests/TestExecutable -i 2.jpg  -m models/yolov8s.json -a yolov8 -f 200 -t 10
+./build/tests/TestExecutable -i 2.jpg  -m models/yolov5s.json -a base -f 200 -t 10
 ```
 
 Example for loading the mp4 and saving it as mp4:
