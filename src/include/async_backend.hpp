@@ -15,6 +15,8 @@
 #include <queue>
 #include <memory>
 #include <unordered_map>
+#include <future>
+#include <atomic>
 #include "hailo/hailort.hpp"
 #include "npu_handler.hpp"
 
@@ -134,7 +136,6 @@ public:
 private:
     struct NetworkInstance {
         std::unique_ptr<NPUHandler> handler;
-        std::vector<hailort::ConfiguredInferModel::Bindings> bindings;
         std::string id_name;
         size_t input_size;
         size_t batch_index;  // Current batch index for round-robin
@@ -142,9 +143,15 @@ private:
         std::vector<hailo_vstream_info_t> vstream_info;
         bool is_nms;
 
-        // Buffer storage for backward compatibility (sync-style API)
-        std::vector<std::vector<std::shared_ptr<uint8_t>>> input_buffers;
-        std::vector<std::vector<std::shared_ptr<uint8_t>>> output_buffers;
+        // Double buffering for async inference (ping-pong buffers)
+        std::vector<std::vector<std::shared_ptr<uint8_t>>> input_buffers[2];   // [buffer_index][batch][stream]
+        std::vector<std::vector<std::shared_ptr<uint8_t>>> output_buffers[2];  // [buffer_index][batch][stream]
+        std::vector<hailort::ConfiguredInferModel::Bindings> bindings[2];      // Bindings per buffer
+        std::atomic<size_t> current_buffer{0};
+        std::atomic<bool> inference_in_progress[2] = {false, false};  // Per-buffer completion flags
+
+        // For tracking completion
+        std::promise<void>* pending_promises[2] = {nullptr, nullptr};
     };
 
     std::unordered_map<std::string, std::shared_ptr<NetworkInstance>> networks_;

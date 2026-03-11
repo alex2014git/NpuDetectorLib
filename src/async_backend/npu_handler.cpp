@@ -175,6 +175,64 @@ std::vector<hailort::ConfiguredInferModel::Bindings> NPUHandler::createBindings(
     return multiple_bindings;
 }
 
+std::vector<hailort::ConfiguredInferModel::Bindings> NPUHandler::rebindBuffers(
+    const std::vector<std::vector<std::shared_ptr<uint8_t>>>& input_buffers,
+    const std::vector<std::vector<std::shared_ptr<uint8_t>>>& output_buffers)
+{
+    if (!model || !inited) {
+        throw std::runtime_error("Model not loaded or not configured");
+    }
+
+    std::vector<hailort::ConfiguredInferModel::Bindings> multiple_bindings;
+
+    for (size_t i = 0; i < batch_size; i++) {
+        auto bindings = configured_model.create_bindings().expect("Failed to create bindings");
+
+        // Process inputs
+        size_t input_idx = 0;
+        for (const auto& input_name : model->get_input_names()) {
+            size_t input_size = model->input(input_name)->get_frame_size();
+
+            if (input_idx >= input_buffers[i].size()) {
+                throw std::runtime_error("Input buffer not provided for batch or input");
+            }
+            auto input_buffer = input_buffers[i][input_idx];
+
+            // Create DMA mapping (required for all buffers)
+            auto input_mapping = hailort::DmaMappedBuffer::create(
+                *vdevice, input_buffer.get(), input_size, HAILO_DMA_BUFFER_DIRECTION_H2D
+            ).expect("Failed to map input buffer");
+            buffer_map_guards.push_back(std::move(input_mapping));
+
+            bindings.input(input_name)->set_buffer(hailort::MemoryView(input_buffer.get(), input_size));
+            input_idx++;
+        }
+
+        // Process outputs
+        size_t output_idx = 0;
+        for (const auto& output_name : model->get_output_names()) {
+            size_t output_size = model->output(output_name)->get_frame_size();
+
+            if (output_idx >= output_buffers[i].size()) {
+                throw std::runtime_error("Output buffer not provided for batch or output");
+            }
+            auto output_buffer = output_buffers[i][output_idx];
+
+            auto output_mapping = hailort::DmaMappedBuffer::create(
+                *vdevice, output_buffer.get(), output_size, HAILO_DMA_BUFFER_DIRECTION_D2H
+            ).expect("Failed to map output buffer");
+            buffer_map_guards.push_back(std::move(output_mapping));
+
+            bindings.output(output_name)->set_buffer(hailort::MemoryView(output_buffer.get(), output_size));
+            output_idx++;
+        }
+
+        multiple_bindings.push_back(std::move(bindings));
+    }
+
+    return multiple_bindings;
+}
+
 std::vector<std::string> NPUHandler::getInputNames()
 {
     return model->get_input_names();

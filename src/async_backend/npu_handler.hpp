@@ -25,6 +25,11 @@ public:
     void setExternalOutputBuffers(const std::vector<std::vector<std::shared_ptr<uint8_t>>>& buffers);
     std::vector<hailort::ConfiguredInferModel::Bindings> createBindings();
 
+    // Reconfigure bindings with new buffers (for double-buffering, avoids re-mapping)
+    std::vector<hailort::ConfiguredInferModel::Bindings> rebindBuffers(
+        const std::vector<std::vector<std::shared_ptr<uint8_t>>>& input_buffers,
+        const std::vector<std::vector<std::shared_ptr<uint8_t>>>& output_buffers);
+
     std::vector<std::string> getInputNames();
     std::vector<std::string> getOutputNames();
     size_t getInputSize(const std::string &input_name);

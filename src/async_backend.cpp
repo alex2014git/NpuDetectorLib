@@ -119,31 +119,37 @@ MnpReturnCode AsyncBackend::AddNetwork(const NetworkConfig& config)
             }
         }
 
-        // Create buffers for sync-style API (backward compatibility)
-        // We create internal buffers that will be used for each inference call
-        network->input_buffers.resize(config.batch_size);
-        network->output_buffers.resize(config.batch_size);
+        // Create double buffers for async inference (ping-pong buffering)
+        // We create two sets of buffers: one for current inference, one for next
+        for (size_t buf = 0; buf < 2; buf++) {
+            network->input_buffers[buf].resize(config.batch_size);
+            network->output_buffers[buf].resize(config.batch_size);
 
-        for (size_t b = 0; b < config.batch_size; b++) {
-            // Create input buffers
-            for (const auto& in_name : input_names) {
-                size_t in_size = network->handler->getInputSize(in_name);
-                auto buffer = network->handler->pageAlignedAlloc(in_size);
-                network->input_buffers[b].push_back(buffer);
-            }
+            for (size_t b = 0; b < config.batch_size; b++) {
+                // Create input buffers
+                for (const auto& in_name : input_names) {
+                    size_t in_size = network->handler->getInputSize(in_name);
+                    auto buffer = network->handler->pageAlignedAlloc(in_size);
+                    network->input_buffers[buf][b].push_back(buffer);
+                }
 
-            // Create output buffers
-            for (const auto& out_name : output_names) {
-                size_t out_size = network->handler->getOutputSize(out_name);
-                auto buffer = network->handler->pageAlignedAlloc(out_size);
-                network->output_buffers[b].push_back(buffer);
+                // Create output buffers
+                for (const auto& out_name : output_names) {
+                    size_t out_size = network->handler->getOutputSize(out_name);
+                    auto buffer = network->handler->pageAlignedAlloc(out_size);
+                    network->output_buffers[buf][b].push_back(buffer);
+                }
             }
         }
 
-        // Create bindings with the internal buffers
-        network->handler->setExternalInputBuffers(network->input_buffers);
-        network->handler->setExternalOutputBuffers(network->output_buffers);
-        network->bindings = network->handler->createBindings();
+        // Create bindings with both buffer sets (will be reconfigured per-inference)
+        network->handler->setExternalInputBuffers(network->input_buffers[0]);
+        network->handler->setExternalOutputBuffers(network->output_buffers[0]);
+        network->bindings[0] = network->handler->createBindings();
+
+        network->handler->setExternalInputBuffers(network->input_buffers[1]);
+        network->handler->setExternalOutputBuffers(network->output_buffers[1]);
+        network->bindings[1] = network->handler->createBindings();
 
         // Store network instance
         networks_[config.id_name] = network;
@@ -160,8 +166,7 @@ MnpReturnCode AsyncBackend::AddNetwork(const NetworkConfig& config)
 
 MnpReturnCode AsyncBackend::Infer(const std::string& id_name, const std::vector<uint8_t>& data, size_t input_stream_index /*= 0*/)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+    // NO GLOBAL LOCK - lock-free read (shared_ptr keeps network alive)
     auto it = networks_.find(id_name);
     if (it == networks_.end()) {
         DBG_ERROR("Network '" << id_name << "' not found");
@@ -171,18 +176,35 @@ MnpReturnCode AsyncBackend::Infer(const std::string& id_name, const std::vector<
     auto& network = it->second;
 
     try {
+        // Get current buffer index (ping-pong)
+        size_t buf_idx = network->current_buffer.fetch_add(1) % 2;
+
+        // Wait for previous inference on THIS buffer to complete (if still running)
+        while (network->inference_in_progress[buf_idx].load()) {
+            std::this_thread::yield();  // Spin-wait briefly
+        }
+
         // For batch_size=1, always use index 0
         size_t batch_idx = 0;
 
-        // Copy data to first input buffer (assuming single input)
-        if (!network->input_buffers[batch_idx].empty() && !data.empty()) {
+        // Copy data to input buffer (selected by ping-pong)
+        if (!network->input_buffers[buf_idx][batch_idx].empty() && !data.empty()) {
             size_t copy_size = std::min(data.size(), network->input_size);
-            memcpy(network->input_buffers[batch_idx][0].get(), data.data(), copy_size);
+            memcpy(network->input_buffers[buf_idx][batch_idx][0].get(), data.data(), copy_size);
         }
 
-        // Run inference (blocking for backward compatibility)
-        // The async API's run() with nullptr callback behaves synchronously
-        network->handler->run(network->bindings, nullptr);
+        // Mark THIS buffer as in-progress
+        network->inference_in_progress[buf_idx].store(true);
+
+        // Reconfigure bindings with current buffer (creates new DMA mappings) and store them
+        network->bindings[buf_idx] = network->handler->rebindBuffers(network->input_buffers[buf_idx], network->output_buffers[buf_idx]);
+
+        // Run async inference WITH CALLBACK (pass the first element since bindings[buf_idx] is a vector)
+        network->handler->run(network->bindings[buf_idx], [network, buf_idx](const auto& outputs) {
+            // Inference complete - mark THIS buffer as done
+            network->inference_in_progress[buf_idx].store(false);
+            // Data is now in output_buffers[buf_idx], ready for ReadOutputById
+        });
 
         return MnpReturnCode::SUCCESS;
 
@@ -194,8 +216,7 @@ MnpReturnCode AsyncBackend::Infer(const std::string& id_name, const std::vector<
 
 MnpReturnCode AsyncBackend::ReadOutputById(const std::string& id_name, std::vector<std::vector<float>>& output_buffer)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+    // NO GLOBAL LOCK - lock-free read
     auto it = networks_.find(id_name);
     if (it == networks_.end()) {
         DBG_ERROR("Network '" << id_name << "' not found");
@@ -205,21 +226,28 @@ MnpReturnCode AsyncBackend::ReadOutputById(const std::string& id_name, std::vect
     auto& network = it->second;
 
     try {
-        // Get output data from the bindings (using last completed batch)
-        // For sync-style API, we read from the output buffers
-        size_t batch_idx = 0;  // For simplicity, read from first batch
+        // Get the buffer that should have completed (the one before current)
+        // Use (current + 1) % 2 to get the previous buffer in ping-pong
+        size_t buf_idx = (network->current_buffer.load() + 1) % 2;
 
-        if (batch_idx >= network->output_buffers.size() || network->output_buffers[batch_idx].empty()) {
+        // Wait for inference on THIS buffer to complete (if still running)
+        while (network->inference_in_progress[buf_idx].load()) {
+            std::this_thread::yield();
+        }
+
+        size_t batch_idx = 0;
+
+        if (batch_idx >= network->output_buffers[buf_idx].size() || network->output_buffers[buf_idx][batch_idx].empty()) {
             return MnpReturnCode::NO_DATA_AVAILABLE;
         }
 
         // Resize output buffer if needed
-        if (output_buffer.size() != network->output_buffers[batch_idx].size()) {
-            output_buffer.resize(network->output_buffers[batch_idx].size());
+        if (output_buffer.size() != network->output_buffers[buf_idx][batch_idx].size()) {
+            output_buffer.resize(network->output_buffers[buf_idx][batch_idx].size());
         }
 
         // Copy data from internal buffers to output buffer
-        for (size_t i = 0; i < network->output_buffers[batch_idx].size(); i++) {
+        for (size_t i = 0; i < network->output_buffers[buf_idx][batch_idx].size(); i++) {
             // Get output size
             auto output_names = network->handler->getOutputNames();
             if (i >= output_names.size()) {
@@ -235,7 +263,7 @@ MnpReturnCode AsyncBackend::ReadOutputById(const std::string& id_name, std::vect
 
             // Copy data - assuming float32 format
             memcpy(output_buffer[i].data(),
-                   network->output_buffers[batch_idx][i].get(),
+                   network->output_buffers[buf_idx][batch_idx][i].get(),
                    out_size);
         }
 
@@ -249,8 +277,7 @@ MnpReturnCode AsyncBackend::ReadOutputById(const std::string& id_name, std::vect
 
 MnpReturnCode AsyncBackend::ReadOutputById(const std::string& id_name, std::vector<std::vector<uint8_t>>& output_buffer)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+    // NO GLOBAL LOCK - lock-free read
     auto it = networks_.find(id_name);
     if (it == networks_.end()) {
         DBG_ERROR("Network '" << id_name << "' not found");
@@ -260,19 +287,28 @@ MnpReturnCode AsyncBackend::ReadOutputById(const std::string& id_name, std::vect
     auto& network = it->second;
 
     try {
+        // Get the buffer that should have completed (the one before current)
+        // Use (current + 1) % 2 to get the previous buffer in ping-pong
+        size_t buf_idx = (network->current_buffer.load() + 1) % 2;
+
+        // Wait for inference on THIS buffer to complete (if still running)
+        while (network->inference_in_progress[buf_idx].load()) {
+            std::this_thread::yield();
+        }
+
         size_t batch_idx = 0;
 
-        if (batch_idx >= network->output_buffers.size() || network->output_buffers[batch_idx].empty()) {
+        if (batch_idx >= network->output_buffers[buf_idx].size() || network->output_buffers[buf_idx][batch_idx].empty()) {
             return MnpReturnCode::NO_DATA_AVAILABLE;
         }
 
         // Resize output buffer if needed
-        if (output_buffer.size() != network->output_buffers[batch_idx].size()) {
-            output_buffer.resize(network->output_buffers[batch_idx].size());
+        if (output_buffer.size() != network->output_buffers[buf_idx][batch_idx].size()) {
+            output_buffer.resize(network->output_buffers[buf_idx][batch_idx].size());
         }
 
         // Copy data from internal buffers to output buffer
-        for (size_t i = 0; i < network->output_buffers[batch_idx].size(); i++) {
+        for (size_t i = 0; i < network->output_buffers[buf_idx][batch_idx].size(); i++) {
             auto output_names = network->handler->getOutputNames();
             if (i >= output_names.size()) {
                 continue;
@@ -285,7 +321,7 @@ MnpReturnCode AsyncBackend::ReadOutputById(const std::string& id_name, std::vect
             }
 
             memcpy(output_buffer[i].data(),
-                   network->output_buffers[batch_idx][i].get(),
+                   network->output_buffers[buf_idx][batch_idx][i].get(),
                    out_size);
         }
 
@@ -299,8 +335,7 @@ MnpReturnCode AsyncBackend::ReadOutputById(const std::string& id_name, std::vect
 
 MnpReturnCode AsyncBackend::InitializeOutputBuffer(const std::string& id_name, std::vector<std::vector<float>>& buffer)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+    // NO GLOBAL LOCK - lock-free read
     auto it = networks_.find(id_name);
     if (it == networks_.end()) {
         DBG_ERROR("Network '" << id_name << "' not found");
@@ -328,8 +363,7 @@ MnpReturnCode AsyncBackend::InitializeOutputBuffer(const std::string& id_name, s
 
 MnpReturnCode AsyncBackend::InitializeOutputBuffer(const std::string& id_name, std::vector<std::vector<uint8_t>>& buffer)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+    // NO GLOBAL LOCK - lock-free read
     auto it = networks_.find(id_name);
     if (it == networks_.end()) {
         DBG_ERROR("Network '" << id_name << "' not found");
@@ -357,8 +391,7 @@ MnpReturnCode AsyncBackend::InitializeOutputBuffer(const std::string& id_name, s
 
 MnpReturnCode AsyncBackend::GetNetworkInputSize(const std::string& id_name, size_t& size)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+    // NO GLOBAL LOCK - lock-free read
     auto it = networks_.find(id_name);
     if (it == networks_.end()) {
         DBG_ERROR("Network '" << id_name << "' not found");
@@ -371,8 +404,7 @@ MnpReturnCode AsyncBackend::GetNetworkInputSize(const std::string& id_name, size
 
 MnpReturnCode AsyncBackend::GetNetworkQuantizationInfo(const std::string& id_name, std::vector<qp_zp_scale_t>& info)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+    // NO GLOBAL LOCK - lock-free read
     auto it = networks_.find(id_name);
     if (it == networks_.end()) {
         DBG_ERROR("Network '" << id_name << "' not found");
@@ -385,8 +417,7 @@ MnpReturnCode AsyncBackend::GetNetworkQuantizationInfo(const std::string& id_nam
 
 MnpReturnCode AsyncBackend::GetNetworkVstream_Info(const std::string& id_name, std::vector<hailo_vstream_info_t>& info, bool get_from_output_stream /*= true*/)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-
+    // NO GLOBAL LOCK - lock-free read
     auto it = networks_.find(id_name);
     if (it == networks_.end()) {
         DBG_ERROR("Network '" << id_name << "' not found");
@@ -403,10 +434,21 @@ void AsyncBackend::Release()
 
     for (auto& [id, network] : networks_) {
         // Clear bindings first (they hold references to buffers)
-        network->bindings.clear();
-        // Clear buffer tracking
-        network->input_buffers.clear();
-        network->output_buffers.clear();
+        for (size_t buf = 0; buf < 2; buf++) {
+            network->bindings[buf].clear();
+        }
+        // Clear buffer tracking (now arrays of buffers)
+        for (size_t buf = 0; buf < 2; buf++) {
+            network->input_buffers[buf].clear();
+            network->output_buffers[buf].clear();
+            // Clean up any pending promises
+            if (network->pending_promises[buf] != nullptr) {
+                delete network->pending_promises[buf];
+                network->pending_promises[buf] = nullptr;
+            }
+            // Reset completion flag
+            network->inference_in_progress[buf].store(false);
+        }
         // Handler destructor will clean up DMA mappings
         network->handler.reset();
     }
