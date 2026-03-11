@@ -22,6 +22,7 @@
 #include "yolo_nms_decoder.hpp"
 #include "common/hailo_objects.hpp"
 #include "common.hpp"
+#include "async_backend.hpp"
 
 //#define TIME_TRACE_DEBUG
 //#define LETTER_BOX
@@ -144,42 +145,40 @@ int NpuBaseImpl::InitNPU()
   #ifdef TIME_TRACE_DEBUG
     std::cout << "Loading model..." << _model_path << std::endl;
   #endif
-    pHailoPipeline = MultiNetworkPipeline::GetInstance();
-    if (pHailoPipeline->InitializeHailo() <= 0) {
-        std::cout << "-W- Hailo device/module not found!" << std::endl;  
-        exit(0);        
+    pAsyncBackend = &AsyncBackend::GetInstance();
+    if (!pAsyncBackend->Initialize()) {
+        std::cout << "-W- Hailo device/module not found!" << std::endl;
+        exit(0);
     }
 
-    stNetworkModelInfo Network;
+    AsyncBackend::NetworkConfig Network;
     Network.hef_path = _model_path;
     Network.output_order_by_name.clear();
     Network.output_order_by_name = _output_order_by_name;
-    Network.batch_size = _batch_size;    
+    Network.batch_size = _batch_size;
     Network.out_format = _out_format;
-    Network.out_quantized = ((_out_format == HAILO_FORMAT_TYPE_FLOAT32) ? false : true); 
-    Network.in_quantized = ((_in_format == HAILO_FORMAT_TYPE_FLOAT32) ? false : true);;
-    Network.in_format = _in_format;
+    Network.out_quantized = ((_out_format == HAILO_FORMAT_TYPE_FLOAT32) ? false : true);
     Network.id_name = _idName + _stream_id;
 
-    if (pHailoPipeline->AddNetwork(0, Network, _stream_id) != MnpReturnCode::SUCCESS) {
-        std::cout << "AddNetwork error on " << _stream_id << std::endl;  
+    if (pAsyncBackend->AddNetwork(Network) != MnpReturnCode::SUCCESS) {
+        std::cout << "AddNetwork error on " << _stream_id << std::endl;
         return -1;
     }
   #ifdef TIME_TRACE_DEBUG
     std::cout << "AddNetwork " << _stream_id << std::endl;
   #endif
 
-    pHailoPipeline->GetNetworkQuantizationInfo(Network.id_name, _quantization_info);
+    pAsyncBackend->GetNetworkQuantizationInfo(Network.id_name, _quantization_info);
     for (int i = 0; i < _quantization_info.size(); i++) {
         _out_zps.push_back(_quantization_info[i].qp_zp);
         _out_scales.push_back(_quantization_info[i].qp_scale);
     }
-    pHailoPipeline->GetNetworkVstream_Info(Network.id_name, _vstream_infos);
-    pHailoPipeline->GetNetworkInputSize(Network.id_name, _network_input_size);
+    pAsyncBackend->GetNetworkVstream_Info(Network.id_name, _vstream_infos);
+    pAsyncBackend->GetNetworkInputSize(Network.id_name, _network_input_size);
     if(_out_format == HAILO_FORMAT_TYPE_FLOAT32) {
-        pHailoPipeline->InitializeOutputBuffer(Network.id_name, _output_buffer_float, _stream_id);
+        pAsyncBackend->InitializeOutputBuffer(Network.id_name, _output_buffer_float);
     } else {
-        pHailoPipeline->InitializeOutputBuffer(Network.id_name, _output_buffer_uint8, _stream_id);
+        pAsyncBackend->InitializeOutputBuffer(Network.id_name, _output_buffer_uint8);
     }
     _initialized = true;
     return 0;
@@ -304,12 +303,12 @@ MnpReturnCode NpuBaseImpl::NpuPorcessing(image_share_t imgData, bool needPreProc
     std::cout << BOLDBLUE << "-I- preprocess run time: " << (double)total_time.count() << " sec" << RESET << std::endl;
     t_start = std::chrono::high_resolution_clock::now();
 #endif
-    pHailoPipeline->Infer(idName, inferData, _stream_id);
+    pAsyncBackend->Infer(idName, inferData);
     //printf("do infer\n");
     if(_out_format == HAILO_FORMAT_TYPE_FLOAT32) {
-        ReadOutRet = pHailoPipeline->ReadOutputById(idName, _output_buffer_float, _stream_id);
+        ReadOutRet = pAsyncBackend->ReadOutputById(idName, _output_buffer_float);
     } else {
-        ReadOutRet = pHailoPipeline->ReadOutputById(idName, _output_buffer_uint8, _stream_id);
+        ReadOutRet = pAsyncBackend->ReadOutputById(idName, _output_buffer_uint8);
     }
     //printf("get  infer out\n");
     if (ReadOutRet == MnpReturnCode::SUCCESS)
@@ -478,7 +477,9 @@ void NpuBaseImpl::DrawResult(image_share_t imgData, bool needFormat)
 
 void NpuBaseImpl::Release(void)
 {
-    pHailoPipeline->ReleaseStreamChannel(0, _stream_id);
+    // AsyncBackend is a singleton, we don't release it here
+    // Individual network cleanup would require a RemoveNetwork method
+    // For now, just mark as uninitialized
     _initialized = false;
 }
 

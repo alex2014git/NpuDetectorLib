@@ -8,6 +8,7 @@
 #include "hailo/hailort.hpp"
 #include "opencv2/opencv.hpp"
 #include "MultiNetworkPipeline/MultiNetworkPipeline.hpp"
+#include "async_backend.hpp"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/prettywriter.h"
@@ -59,7 +60,7 @@ protected:
     std::vector<std::vector<float>> _output_buffer_float;
     std::vector<hailo_vstream_info_t> _vstream_infos;
     std::vector<_object_roi> _objects;
-    MultiNetworkPipeline *pHailoPipeline;
+    AsyncBackend* pAsyncBackend;
     rapidjson::Document _dom;
     struct timeval _start_time, _stop_time;
 

@@ -27,6 +27,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/src/include
     ${HAILORT_INCLUDE}
     ${OpenCV_INCLUDE_DIRS}
+    ${PROJECT_SOURCE_DIR}/src/async_backend
 )
 
 # Add source files
@@ -34,6 +35,7 @@ file(GLOB SOURCES
     *.cpp
     yolov8/*.cpp
     MultiNetworkPipeline/*.cpp
+    ${PROJECT_SOURCE_DIR}/src/async_backend/npu_handler.cpp
 )
 
 # Create the library
