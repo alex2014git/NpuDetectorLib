@@ -1,13 +1,13 @@
 #ifndef _NPU_YOLOV8_SEG_API_IMPL_H
 #define _NPU_YOLOV8_SEG_API_IMPL_H
 #include "npu.hpp"
-#include "npu_base_impl.hpp"
+#include "core/npu_base_impl.hpp"
 #include <vector>
 #include <string>
 #include <functional>
 #include <memory>
 #include "hailo/hailort.hpp"
-#include "yolov8seg_postprocess.hpp"
+#include "algorithms/detection/yolov8seg_postprocess.hpp"
 
 class NpuYolov8SegImpl : public NpuBaseImpl {
 public:

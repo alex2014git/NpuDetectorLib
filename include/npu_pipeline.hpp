@@ -8,6 +8,7 @@
 #include "pipeline/npu_pipeline_scheduler.hpp"
 #include "pipeline/npu_pipeline_graph.hpp"
 #include "npu.hpp"
+#include "npu_factory.hpp"
 
 #include <memory>
 #include <string>

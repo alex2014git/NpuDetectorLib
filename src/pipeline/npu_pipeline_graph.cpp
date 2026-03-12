@@ -1,6 +1,7 @@
 #include "pipeline/npu_pipeline_graph.hpp"
+#include "pipeline/npu_pipeline_node.hpp"
 #include <queue>
-#include <stack>
+#include <stdexcept>
 
 namespace npu_pipeline {
 
@@ -376,12 +377,23 @@ PipelineGraphBuilder& PipelineGraphBuilder::connectFilter(const std::string& fro
 std::unique_ptr<PipelineGraph> PipelineGraphBuilder::build() {
     auto graph = std::make_unique<PipelineGraph>();
 
-    // Create nodes (actual implementation needs NPU factory)
+    // Create nodes from temp nodes
     for (const auto& temp : _temp_nodes) {
         if (temp.node) {
+            // Custom node (already created)
             graph->addNode(temp.node);
+        } else if (temp.type == "npu") {
+            // Create NPU inference node from algorithm_type and model_config
+            auto npu_node = std::make_shared<NpuInferenceNode>(temp.id, temp.algorithm_type);
+            // Load model config (stored in model_config path)
+            npu_node->setModelConfig(temp.model_config);
+            graph->addNode(npu_node);
+        } else if (temp.type == "transform") {
+            // Create transform node
+            auto transform_node = std::make_shared<TransformNode>(temp.id, temp.transform_op);
+            graph->addNode(transform_node);
         }
-        // NPU and Transform nodes need to be created via factory
+        // Other types handled similarly
     }
 
     // Add edges

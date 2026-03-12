@@ -1,4 +1,4 @@
-#include "yolov8_common.hpp"
+#include "algorithms/detection/yolov8_common.hpp"
 
 
 float dequantize_value(uint8_t val, float32_t qp_scale, float32_t qp_zp){

@@ -63,6 +63,13 @@ public:
     MnpReturnCode AddNetwork(const NetworkConfig& config);
 
     /**
+     * Remove network from the async backend
+     * @param id_name The network id name to remove
+     * @return MnpReturnCode::SUCCESS on success, error code otherwise
+     */
+    MnpReturnCode RemoveNetwork(const std::string& id_name);
+
+    /**
      * Run inference on the specified network (blocking call for backward compatibility)
      * @param id_name The network id name to infer
      * @param data The input data

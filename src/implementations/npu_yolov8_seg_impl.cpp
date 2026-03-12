@@ -7,9 +7,9 @@
 #include <dlfcn.h>
 #include <sys/time.h>
 #endif
-#include "npu_yolov8_seg_impl.hpp"
+#include "implementations/npu_yolov8_seg_impl.hpp"
 #include "common/hailo_objects.hpp"
-#include "yolov8seg_postprocess.hpp"
+#include "algorithms/detection/yolov8seg_postprocess.hpp"
 
 //#define TIME_TRACE_DEBUG
 

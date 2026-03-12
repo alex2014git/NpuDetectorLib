@@ -18,7 +18,7 @@
 #include "opencv2/core.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
-#include "npu_base_impl.hpp"
+#include "core/npu_base_impl.hpp"
 #include "yolo_nms_decoder.hpp"
 #include "common/hailo_objects.hpp"
 #include "common.hpp"
@@ -480,9 +480,11 @@ void NpuBaseImpl::DrawResult(image_share_t imgData, bool needFormat)
 
 void NpuBaseImpl::Release(void)
 {
-    // AsyncBackend is a singleton, we don't release it here
-    // Individual network cleanup would require a RemoveNetwork method
-    // For now, just mark as uninitialized
+    // Remove the network from AsyncBackend singleton
+    if (_initialized && pAsyncBackend) {
+        std::string network_id = _idName + _stream_id;
+        pAsyncBackend->RemoveNetwork(network_id);
+    }
     _initialized = false;
 }
 

@@ -8,8 +8,8 @@
 #include <cmath>
 
 // Hailo includes
-#include "yolov8_common.hpp"
-#include "yolov8seg_postprocess.hpp"
+#include "algorithms/detection/yolov8_common.hpp"
+#include "algorithms/detection/yolov8seg_postprocess.hpp"
 
 using namespace xt::placeholders;
 

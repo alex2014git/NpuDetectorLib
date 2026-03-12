@@ -1,13 +1,13 @@
 #ifndef _NPU_YOLOV8_POSE_API_IMPL_H
 #define _NPU_YOLOV8_POSE_API_IMPL_H
 #include "npu.hpp"
-#include "npu_base_impl.hpp"
+#include "core/npu_base_impl.hpp"
 #include <vector>
 #include <string>
 #include <functional>
 #include <memory>
 #include "hailo/hailort.hpp"
-#include "yolov8pose_postprocess.hpp"
+#include "algorithms/pose/yolov8pose_postprocess.hpp"
 
 class NpuYolov8PoseImpl : public NpuBaseImpl {
 public:

@@ -12,8 +12,8 @@
 #include <vector>
 
 // Hailo includes
-#include "yolov8_common.hpp"
-#include "yolov8_postprocess.hpp"
+#include "algorithms/detection/yolov8_common.hpp"
+#include "algorithms/detection/yolov8_postprocess.hpp"
 
 using namespace xt::placeholders;
 

@@ -31,17 +31,23 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/include/pipeline
 )
 
-# Add source files
-file(GLOB SOURCES
-    *.cpp
-    yolov8/*.cpp
-    MultiNetworkPipeline/*.cpp
-    pipeline/*.cpp
+# Add root-level sources (async_backend and factory)
+set(ROOT_SOURCES
+    async_backend.cpp
+    factory.cpp
     ${PROJECT_SOURCE_DIR}/src/async_backend/npu_handler.cpp
 )
 
 # Create the library
-add_library(NpuLibrary SHARED ${SOURCES})
+add_library(NpuLibrary SHARED ${ROOT_SOURCES})
+
+# Add subdirectories after library is defined
+add_subdirectory(core)
+add_subdirectory(common)
+add_subdirectory(implementations)
+add_subdirectory(algorithms)
+add_subdirectory(pipeline)
+add_subdirectory(MultiNetworkPipeline)
 
 # Link libraries
 target_link_libraries(NpuLibrary

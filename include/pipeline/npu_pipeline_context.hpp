@@ -85,12 +85,14 @@ struct FrameResults {
         });
     }
 
-    // Mark frame as complete
+    // Mark frame as complete (idempotent - only first call invokes callback)
     void markComplete() {
-        execution_complete.store(true, std::memory_order_release);
-        completion_cv.notify_all();
-        if (completion_callback) {
-            completion_callback(*this);
+        bool expected = false;
+        if (execution_complete.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
+            completion_cv.notify_all();
+            if (completion_callback) {
+                completion_callback(*this);
+            }
         }
     }
 };

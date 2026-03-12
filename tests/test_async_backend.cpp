@@ -19,6 +19,7 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <atomic>
 
 // Test result tracking
 static int g_tests_passed = 0;
@@ -74,7 +75,7 @@ bool test_single_network_inference() {
     }
 
     // Create NPU through factory (which uses AsyncBackend internally)
-    auto npu = NpuFactory::CreateNpu(ALG_YOLO_V5);
+    auto npu = NpuFactory::CreateNpu(ALG_BASE);
     TEST_ASSERT_MSG(npu != nullptr, "NpuFactory creates instance");
 
     int init_result = npu->Initialize("models/yolov5s.json", 0);
@@ -127,7 +128,7 @@ bool test_sequential_networks() {
 
     // Create and test first network
     {
-        auto npu1 = NpuFactory::CreateNpu(ALG_YOLO_V5);
+        auto npu1 = NpuFactory::CreateNpu(ALG_BASE);
         TEST_ASSERT_MSG(npu1 != nullptr, "NPU1 created");
 
         int result1 = npu1->Initialize("models/yolov5s.json", 0);
@@ -142,7 +143,7 @@ bool test_sequential_networks() {
 
     // Create and test second network (different stream ID)
     {
-        auto npu2 = NpuFactory::CreateNpu(ALG_YOLO_V5);
+        auto npu2 = NpuFactory::CreateNpu(ALG_BASE);
         TEST_ASSERT_MSG(npu2 != nullptr, "NPU2 created");
 
         int result2 = npu2->Initialize("models/yolov5s.json", 1);
@@ -171,7 +172,7 @@ bool test_rapid_inference_stress() {
     }
 
     // Create NPU
-    auto npu = NpuFactory::CreateNpu(ALG_YOLO_V5);
+    auto npu = NpuFactory::CreateNpu(ALG_BASE);
     if (!npu) {
         std::cerr << "  FAIL: Could not create NPU" << std::endl;
         g_tests_failed++;
@@ -238,7 +239,7 @@ bool test_network_id_management() {
     std::vector<int> stream_ids = {0, 1, 2, 3};
 
     for (size_t i = 0; i < stream_ids.size(); i++) {
-        auto npu = NpuFactory::CreateNpu(ALG_YOLO_V5);
+        auto npu = NpuFactory::CreateNpu(ALG_BASE);
         if (!npu) {
             std::cerr << "  FAIL: Could not create NPU instance " << i << std::endl;
             g_tests_failed++;
@@ -287,7 +288,7 @@ bool test_multiple_algorithms() {
 
     // Test YOLOv5
     {
-        auto npu = NpuFactory::CreateNpu(ALG_YOLO_V5);
+        auto npu = NpuFactory::CreateNpu(ALG_BASE);
         if (!npu) {
             std::cerr << "  FAIL: Could not create YOLOv5 NPU" << std::endl;
             g_tests_failed++;
@@ -334,6 +335,76 @@ bool test_multiple_algorithms() {
     return true;
 }
 
+// Test: Multi-threaded with different stream IDs
+bool test_multithread_different_streams() {
+    std::cout << "\n[Test] Multi-thread with Different Stream IDs" << std::endl;
+
+    if (!file_exists("tests/test_image.jpg")) {
+        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+        g_tests_passed++;
+        return true;
+    }
+
+    cv::Mat image = cv::imread("tests/test_image.jpg");
+    if (image.empty()) {
+        std::cerr << "  FAIL: Could not load test image" << std::endl;
+        g_tests_failed++;
+        return false;
+    }
+
+    image_share_t imgData;
+    imgData.data = (void*)image.data;
+    imgData.width = image.cols;
+    imgData.height = image.rows;
+    imgData.ch = 3;
+
+    const int num_threads = 4;
+    std::vector<std::thread> threads;
+    std::atomic<int> success_count(0);
+
+    auto worker = [&](int thread_id) {
+        auto npu = NpuFactory::CreateNpu(ALG_BASE);
+        if (!npu) {
+            std::cerr << "  FAIL: Thread " << thread_id << " could not create NPU" << std::endl;
+            return;
+        }
+
+        // Each thread uses a different stream ID
+        int stream_id = thread_id;
+        int result = npu->Initialize("models/yolov5s.json", stream_id);
+        if (result < 0) {
+            std::cerr << "  FAIL: Thread " << thread_id << " initialization failed" << std::endl;
+            return;
+        }
+
+        // Run inference
+        int detections = npu->Detect(imgData, true);
+        if (detections >= 0) {
+            success_count++;
+            std::cout << "  Thread " << thread_id << " (stream_id=" << stream_id
+                      << "): " << detections << " detections" << std::endl;
+        }
+
+        npu->Release();
+    };
+
+    // Spawn threads
+    for (int i = 0; i < num_threads; i++) {
+        threads.emplace_back(worker, i);
+    }
+
+    // Wait for all threads
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    TEST_ASSERT_MSG(success_count == num_threads,
+                    "All " + std::to_string(num_threads) + " threads succeeded");
+
+    std::cout << "  Multi-thread with different stream IDs test passed" << std::endl;
+    return true;
+}
+
 int main(int argc, char** argv) {
     std::cout << "========================================" << std::endl;
     std::cout << "NpuDetectorLib - Async Backend Tests" << std::endl;
@@ -348,6 +419,7 @@ int main(int argc, char** argv) {
     all_passed &= test_rapid_inference_stress();
     all_passed &= test_network_id_management();
     all_passed &= test_multiple_algorithms();
+    all_passed &= test_multithread_different_streams();
 
     // Print summary
     std::cout << "\n========================================" << std::endl;

@@ -64,7 +64,9 @@ public:
             {"yolov5", ALG_YOLO_V5},
             {"yolov8", ALG_YOLO_V8},
             {"yolov8_pose", ALG_POSE},
-            {"yolov8_seg", ALG_YOLO_V8_SEG}
+            {"yolov8_seg", ALG_YOLO_V8_SEG},
+            {"lpr", ALG_LPR},
+            {"classification", ALG_CLASSIFICATION}
         };
         auto it = strToEnumMap.find(enumStr);
         if (it != strToEnumMap.end()) {

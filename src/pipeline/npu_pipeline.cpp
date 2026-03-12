@@ -46,6 +46,18 @@ int NpuPipeline::build(std::unique_ptr<PipelineGraph> graph) {
     _scheduler = std::make_unique<PipelineScheduler>();
     _scheduler->initialize(*_graph, _config.scheduler);
 
+    // Initialize all NPU nodes
+    auto nodes = _graph->getAllNodes();
+    for (auto& node : nodes) {
+        auto npu_node = std::dynamic_pointer_cast<NpuInferenceNode>(node);
+        if (npu_node) {
+            int ret = npu_node->initialize(npu_node->getModelConfig(), 0);
+            if (ret != 0) {
+                return ret;
+            }
+        }
+    }
+
     _built.store(true);
     return 0;
 }
@@ -75,6 +87,18 @@ int NpuPipeline::build(const PipelineConfig& config) {
     _scheduler = std::make_unique<PipelineScheduler>();
     _scheduler->initialize(*_graph, _config.scheduler);
 
+    // Initialize all NPU nodes
+    auto nodes = _graph->getAllNodes();
+    for (auto& node : nodes) {
+        auto npu_node = std::dynamic_pointer_cast<NpuInferenceNode>(node);
+        if (npu_node) {
+            int ret = npu_node->initialize(npu_node->getModelConfig(), 0);
+            if (ret != 0) {
+                return ret;
+            }
+        }
+    }
+
     _built.store(true);
     return 0;
 }
@@ -84,6 +108,11 @@ int NpuPipeline::addNpuNode(const std::string& node_id,
                             int algorithm_type,
                             const std::string& model_config) {
     if (_built.load()) {
+        return -1;
+    }
+
+    // Validate algorithm type is supported
+    if (!NpuFactory::IsRegistered(static_cast<algorithm>(algorithm_type))) {
         return -1;
     }
 

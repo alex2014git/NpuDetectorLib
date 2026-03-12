@@ -20,8 +20,9 @@ PipelineScheduler::~PipelineScheduler() {
 void PipelineScheduler::initialize(const PipelineGraph& graph, const SchedulerConfig& config) {
     _config = config;
 
-    // Create thread pool for parallel execution
-    if (_config.strategy == SchedulerConfig::PARALLEL) {
+    // Create thread pool for parallel/batched execution
+    if (_config.strategy == SchedulerConfig::PARALLEL ||
+        _config.strategy == SchedulerConfig::BATCHED) {
         _thread_pool = std::make_unique<ThreadPool>(_config.thread_pool_size);
     }
 

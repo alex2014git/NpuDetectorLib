@@ -164,6 +164,51 @@ MnpReturnCode AsyncBackend::AddNetwork(const NetworkConfig& config)
     }
 }
 
+MnpReturnCode AsyncBackend::RemoveNetwork(const std::string& id_name)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = networks_.find(id_name);
+    if (it == networks_.end()) {
+        DBG_WARN("Network with id_name '" << id_name << "' not found for removal");
+        return MnpReturnCode::NOT_FOUND;
+    }
+
+    try {
+        auto& network = it->second;
+
+        // Clear bindings first (they hold references to buffers)
+        for (size_t buf = 0; buf < 2; buf++) {
+            network->bindings[buf].clear();
+        }
+
+        // Clear buffer tracking
+        for (size_t buf = 0; buf < 2; buf++) {
+            network->input_buffers[buf].clear();
+            network->output_buffers[buf].clear();
+            // Clean up any pending promises
+            if (network->pending_promises[buf] != nullptr) {
+                delete network->pending_promises[buf];
+                network->pending_promises[buf] = nullptr;
+            }
+            // Reset completion flag
+            network->inference_in_progress[buf].store(false);
+        }
+
+        // Handler destructor will clean up DMA mappings
+        network->handler.reset();
+
+        networks_.erase(it);
+
+        DBG_DEBUG("Removed network: " << id_name);
+        return MnpReturnCode::SUCCESS;
+
+    } catch (const std::exception& e) {
+        DBG_ERROR("Failed to remove network: " << e.what());
+        return MnpReturnCode::FAILED;
+    }
+}
+
 MnpReturnCode AsyncBackend::Infer(const std::string& id_name, const std::vector<uint8_t>& data, size_t input_stream_index /*= 0*/)
 {
     // NO GLOBAL LOCK - lock-free read (shared_ptr keeps network alive)

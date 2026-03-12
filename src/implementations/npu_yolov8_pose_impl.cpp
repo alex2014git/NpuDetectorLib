@@ -6,9 +6,9 @@
 #include <dlfcn.h>
 #include <sys/time.h>
 #endif
-#include "npu_yolov8_pose_impl.hpp"
+#include "implementations/npu_yolov8_pose_impl.hpp"
 #include "common/hailo_objects.hpp"
-#include "yolov8pose_postprocess.hpp"
+#include "algorithms/pose/yolov8pose_postprocess.hpp"
 
 //#define TIME_TRACE_DEBUG
 

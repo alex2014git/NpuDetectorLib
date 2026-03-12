@@ -7,7 +7,7 @@
 #include <dlfcn.h>
 #include <sys/time.h>
 #endif
-#include "npu_yolo_impl.hpp"
+#include "implementations/npu_yolo_impl.hpp"
 #include "yolo_nms_decoder.hpp"
 
 //#define TIME_TRACE_DEBUG

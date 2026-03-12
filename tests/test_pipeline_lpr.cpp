@@ -169,7 +169,7 @@ bool test_detection_lpr_pipeline() {
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
     // Add detection node
-    int det_result = pipeline.addNpuNode("detector", ALG_YOLO_V8, "models/yolov8s_lp.json");
+    int det_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov8s_lp.json");
     if (det_result != 0) {
         std::cout << "  SKIP: Could not add detection node" << std::endl;
         g_tests_passed++;
@@ -263,7 +263,7 @@ bool test_parallel_pipeline() {
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
     // Add detection node
-    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_V5, "models/yolov5s.json");
+    int node_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov5s.json");
     if (node_result != 0) {
         std::cout << "  SKIP: Could not add detection node" << std::endl;
         g_tests_passed++;
@@ -310,7 +310,7 @@ bool test_pipeline_edges() {
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
     // Add detection node
-    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_V5, "models/yolov5s.json");
+    int node_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov5s.json");
     if (node_result != 0) {
         std::cout << "  SKIP: Could not add detection node" << std::endl;
         g_tests_passed++;
@@ -347,7 +347,7 @@ bool test_pipeline_stats() {
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
     // Add detection node
-    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_V5, "models/yolov5s.json");
+    int node_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov5s.json");
     if (node_result != 0) {
         std::cout << "  SKIP: Could not add detection node" << std::endl;
         g_tests_passed++;
