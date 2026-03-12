@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <chrono>
+#include <iostream>
 #ifndef _WIN32
 #include <dlfcn.h>
 #include <sys/time.h>
@@ -43,12 +44,22 @@ size_t NpuYoloImpl::GetDetectionsYolo(std::vector<uint8_t> &fm1, std::vector<uin
 
 size_t NpuYoloImpl::YoloPostProcessing(std::vector<std::vector<uint8_t>>& inferOutResult, std::vector<qp_zp_scale_t> &quantizationInfo, std::vector<float32_t>& detectionsResult)
 {
+    // Validate that we have the expected 3 output buffers for YOLO feature maps
+    // YOLOv5 expects 3 feature map outputs at different scales (e.g., 20x20, 40x40, 80x80)
+    if (inferOutResult.size() < 3) {
+        std::cerr << "ERROR: YoloPostProcessing expects 3 output buffers but got "
+                  << inferOutResult.size() << std::endl;
+        return 0;
+    }
     return GetDetectionsYolo(inferOutResult[0], inferOutResult[1], inferOutResult[2], quantizationInfo, _conf_threshold, detectionsResult);
 }
 
 int NpuYoloImpl::Initialize(std::string configJsonFile, int streamId)
 {
-    InitConfig(configJsonFile, streamId);
+    int result = InitConfig(configJsonFile, streamId);
+    if (result < 0) {
+        return result;  // Propagate config loading failure
+    }
     //get my extra json parameter from the _dom.
     if (_dom.HasMember("feature_map_size") && _dom["feature_map_size"].IsArray()) {
         const rapidjson::Value& arr = _dom["feature_map_size"];

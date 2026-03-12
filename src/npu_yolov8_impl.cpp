@@ -19,7 +19,10 @@ NpuYolov8Impl::NpuYolov8Impl(void)
 
 int NpuYolov8Impl::Initialize(std::string configJsonFile, int streamId)
 {
-    InitConfig(configJsonFile, streamId);
+    int result = InitConfig(configJsonFile, streamId);
+    if (result < 0) {
+        return result;  // Propagate config loading failure
+    }
     if (_dom.HasMember("feature_map_size") && _dom["feature_map_size"].IsArray()) {
         const rapidjson::Value& arr = _dom["feature_map_size"];
         for (int i = 0; i < arr.Size(); ++i) {

@@ -58,7 +58,10 @@ size_t NpuYolov8PoseImpl::post_processing_all(std::vector<std::vector<uint8_t>> 
 
 int NpuYolov8PoseImpl::Initialize(std::string configJsonFile, int streamId)
 {
-    InitConfig(configJsonFile, streamId);
+    int result = InitConfig(configJsonFile, streamId);
+    if (result < 0) {
+        return result;  // Propagate config loading failure
+    }
     //get my extra json parameter from the _dom.
     if (_dom.HasMember("feature_map_size") && _dom["feature_map_size"].IsArray()) {
         const rapidjson::Value& arr = _dom["feature_map_size"];

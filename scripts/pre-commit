@@ -1,46 +1,43 @@
 #!/bin/bash
-# Pre-commit validation hook
-# Runs cmake build and test executable to validate changes before committing
-
 set -e
 
-echo "Running pre-commit validation..."
+echo "=== Pre-commit Validation ==="
 
-# Step 1: Configure cmake
-echo "Configuring cmake..."
-cmake -S . -Bbuild -DBUILD_TESTER=ON -DTIME_TRACE_DEBUG=ON
+# 1. Configure - MUST include both flags for validation tests
+echo "[1/8] Configuring cmake..."
+cmake -S . -Bbuild -DBUILD_TESTER=ON -DBUILD_VALIDATION_TESTS=ON
 
-# Step 2: Rebuild
-echo "Building project..."
+# 2. Build
+echo "[2/8] Building project..."
 cmake --build build
-if [ $? -ne 0 ]; then
-    echo "Build failed! Commit blocked."
-    exit 1
-fi
 
-# Step 3: Run base test
-echo "Running base test (yolov5s)..."
+# 3. yolov5s test
+echo "[3/8] Running yolov5s test..."
 ./build/tests/TestExecutable -i 2.jpg
-if [ $? -ne 0 ]; then
-    echo "Base test failed! Commit blocked."
-    exit 1
-fi
 
-# Step 4: Run YOLOv8 pose test
-echo "Running YOLOv8 pose test..."
+# 4. yolov8_pose test
+echo "[4/8] Running yolov8_pose test..."
 ./build/tests/TestExecutable -i 2.jpg -a yolov8_pose -m models/yolov8s_pose.json
-if [ $? -ne 0 ]; then
-    echo "YOLOv8 pose test failed! Commit blocked."
-    exit 1
-fi
 
-# Step 5: Run YOLOv8 segmentation test
-echo "Running YOLOv8 segmentation test..."
+# 5. yolov8_seg test
+echo "[5/8] Running yolov8_seg test..."
 ./build/tests/TestExecutable -i 2.jpg -a yolov8_seg -m models/yolov8s_seg.json
-if [ $? -ne 0 ]; then
-    echo "YOLOv8 segmentation test failed! Commit blocked."
-    exit 1
-fi
 
-echo "Validation passed!"
+# 6. TestModelLoading
+echo "[6/8] Running TestModelLoading..."
+./build/tests/TestModelLoading
+
+# 7. TestSingleInference
+echo "[7/8] Running TestSingleInference..."
+./build/tests/TestSingleInference
+
+# 8. TestThreadSafety
+echo "[8/8] Running TestThreadSafety..."
+./build/tests/TestThreadSafety
+
+# 9. TestPipelineLpr
+echo "[9/9] Running TestPipelineLpr..."
+./build/tests/TestPipelineLpr
+
+echo "=== All validation passed! ==="
 exit 0

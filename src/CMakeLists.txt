@@ -23,11 +23,12 @@
 
 # Add include directories
 include_directories(
-    #${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src/include
     ${HAILORT_INCLUDE}
     ${OpenCV_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/src/async_backend
+    ${PROJECT_SOURCE_DIR}/include/pipeline
 )
 
 # Add source files
@@ -35,6 +36,7 @@ file(GLOB SOURCES
     *.cpp
     yolov8/*.cpp
     MultiNetworkPipeline/*.cpp
+    pipeline/*.cpp
     ${PROJECT_SOURCE_DIR}/src/async_backend/npu_handler.cpp
 )
 

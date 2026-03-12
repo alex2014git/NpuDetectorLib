@@ -1,0 +1,14 @@
+{
+    "name": "yolov8s-lp",
+    "model_path": "models/det_v8.hef",
+    "classes": 2,
+    "feature_map_size": [80, 40, 20],
+    "labels": ["__background__", "vehicle", "license_plate"],
+    "size": [640, 640, 3],
+    "threshold": 0.5,
+    "yolo_nms_core": true,
+    "output_order_by_name": ["det_v8/yolov8_nms_postprocess"],
+    "out_quantized": false,
+    "out_format": "HAILO_FORMAT_TYPE_FLOAT32",
+    "out_sigmoid": true
+}

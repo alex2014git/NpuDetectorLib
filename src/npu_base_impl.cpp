@@ -325,7 +325,10 @@ MnpReturnCode NpuBaseImpl::NpuPorcessing(image_share_t imgData, bool needPreProc
 
 int NpuBaseImpl::Initialize(std::string configJsonFile, int streamId)
 {
-    InitConfig(configJsonFile, streamId);
+    int result = InitConfig(configJsonFile, streamId);
+    if (result < 0) {
+        return result;  // Propagate config loading failure
+    }
     //get my extra json parameter from the _dom.
     if(_dom.HasMember("yolo_nms_core") && _dom["yolo_nms_core"].IsBool()) {
         _nms_core = _dom["yolo_nms_core"].GetBool();

@@ -20,6 +20,7 @@ message("LETTER_BOX value: ${LETTER_BOX}")
 message("SHOW_LABEL value: ${SHOW_LABEL}")
 message("TIME_TRACE_DEBUG value: ${TIME_TRACE_DEBUG}")
 message("BUILD_TESTER value: ${BUILD_TESTER}")
+message("BUILD_VALIDATION_TESTS value: ${BUILD_VALIDATION_TESTS}")
 
 # Add include directories
 include_directories(

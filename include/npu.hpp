@@ -6,12 +6,20 @@
 #include <memory>
 
 enum algorithm {
-    ALG_BASE,         //hailo PP detection.
-    ALG_YOLO_V5,      //yolov5-yolov7 self post processing.
-    ALG_YOLO_V8,       //yolov8 self post processing.
-    ALG_POSE,         //yolov8-pose.
-    ALG_YOLO_V8_SEG,   //yolov8-seg
-    ALG_SCRFD         //SCRFD10G.
+    // Detection models using HailoRT built-in NMS (yolo_nms_core: true in JSON)
+    ALG_BASE,              // Generic detection with HailoRT NMS
+
+    // YOLO models with software post-processing (yolo_nms_core: false in JSON)
+    ALG_YOLO_V5,           // YOLOv5-v7 detection with self NMS
+    ALG_YOLO_V8,           // YOLOv8 detection with self NMS
+
+    // Specialized YOLO variants (all use yolo_nms_core: false)
+    ALG_POSE,              // YOLOv8-pose (keypoint detection)
+    ALG_YOLO_V8_SEG,       // YOLOv8 instance segmentation
+
+    // Non-YOLO models (no NMS needed)
+    ALG_LPR,               // License Plate Recognition
+    ALG_CLASSIFICATION     // Image classification
 };
 
 typedef struct _image_share
