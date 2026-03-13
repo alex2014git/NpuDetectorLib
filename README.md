@@ -46,24 +46,24 @@ Usage: ./build/tests/TestExecutable
  -i  input file name (default: input.mp4)
  -o  output file name (default: output.mp4)
  -m  model json file path (default: yolov5s.json)
- -a  running alg: base, yolov8_pose, yolov8_seg (default: base)
+ -a  running alg: yolo_nms, yolov5, yolov8, yolov8_pose, yolov8_seg, lpr, classification (default: yolo_nms)
  -f  frame count (default: 1)
  -t  thread count (default: 1)
 ```
 
-Example for checking the model performance:
+Example for checking the model performance (YOLO with hardware NMS):
 ```sh
-./build/tests/TestExecutable -i 2.jpg  -m models/yolov5s.json -a base -f 200 -t 10
+./build/tests/TestExecutable -i 2.jpg  -m models/yolov5s.json -a yolo_nms -f 200 -t 10
 ```
 
 Example for loading the mp4 and saving it as mp4:
 ```sh
-./build/tests/TestExecutable -i VID.mp4 -o VID_out.mp4  -m models/yolov8s_nms.json -a base
+./build/tests/TestExecutable -i VID.mp4 -o VID_out.mp4  -m models/yolov8s_nms.json -a yolo_nms
 ```
 
 Example for loading different model on different thread:
 ```sh
-./build/tests/TestExecutable -t 2 -m models/yolov8s_nms.json -m models/yolov8s_seg.json -a base -a yolov8_seg
+./build/tests/TestExecutable -t 2 -m models/yolov8s_nms.json -m models/yolov8s_seg.json -a yolo_nms -a yolov8_seg
 ```
 
 Example for using the usb camera(only support one stream):
@@ -81,7 +81,9 @@ cmake --build build
 
 Available validation tests:
 - `TestModelLoading` - Verifies model JSON configs can be parsed and HEF files are accessible
-- `TestSingleInference` - Tests inference produces valid outputs on a test image
+- `TestSingleInference` - Tests inference produces valid outputs on test images (person, car, plate)
+- `TestFactoryMapping` - Validates algorithm-to-implementation factory mappings
+- `TestLprClassification` - Tests LPR and Classification model functionality
 - `TestThreadSafety` - Verifies concurrent access from multiple threads
 - `TestAsyncBackend` - Stress tests the async backend
 
@@ -89,6 +91,8 @@ Run individual tests:
 ```sh
 ./build/tests/TestModelLoading
 ./build/tests/TestSingleInference
+./build/tests/TestFactoryMapping
+./build/tests/TestLprClassification
 ./build/tests/TestThreadSafety
 ./build/tests/TestAsyncBackend
 ```

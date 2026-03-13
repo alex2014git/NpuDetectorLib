@@ -90,4 +90,32 @@ if(BUILD_VALIDATION_TESTS)
         set_target_properties(TestAsyncBackend PROPERTIES COMPILE_FLAGS "/MD")
     endif()
     add_test(NAME TestAsyncBackend COMMAND TestAsyncBackend)
+
+    # Test 6: Factory Mapping
+    add_executable(TestFactoryMapping test_factory_mapping.cpp)
+    target_link_libraries(TestFactoryMapping
+        ${HAILORT_LIB}
+        ${OpenCV_LIBS}
+        Threads::Threads
+        NpuLibrary
+    )
+    if (WIN32)
+        target_link_directories(TestFactoryMapping PRIVATE ${PROJECT_BINARY_DIR}/lib)
+        set_target_properties(TestFactoryMapping PROPERTIES COMPILE_FLAGS "/MD")
+    endif()
+    add_test(NAME TestFactoryMapping COMMAND TestFactoryMapping)
+
+    # Test 7: LPR and Classification
+    add_executable(TestLprClassification test_lpr_classification.cpp)
+    target_link_libraries(TestLprClassification
+        ${HAILORT_LIB}
+        ${OpenCV_LIBS}
+        Threads::Threads
+        NpuLibrary
+    )
+    if (WIN32)
+        target_link_directories(TestLprClassification PRIVATE ${PROJECT_BINARY_DIR}/lib)
+        set_target_properties(TestLprClassification PROPERTIES COMPILE_FLAGS "/MD")
+    endif()
+    add_test(NAME TestLprClassification COMMAND TestLprClassification)
 endif()

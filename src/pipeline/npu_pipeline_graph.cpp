@@ -225,20 +225,72 @@ bool PipelineGraph::validate(std::string& error_msg) const {
     // Check for input nodes
     auto inputs = getInputNodes();
     if (inputs.empty()) {
-        error_msg = "Graph has no input nodes";
+        error_msg = "Graph has no input nodes (all nodes have dependencies)";
         return false;
     }
 
     // Check that all referenced nodes exist
     for (const auto& [from, edges] : _edges) {
         if (!hasNode(from)) {
-            error_msg = "Edge references non-existent node: " + from;
+            error_msg = "Edge references non-existent source node: " + from;
             return false;
         }
         for (const auto& edge : edges) {
             if (!hasNode(edge.to_node)) {
-                error_msg = "Edge references non-existent node: " + edge.to_node;
+                error_msg = "Edge references non-existent destination node: " + edge.to_node;
                 return false;
+            }
+        }
+    }
+
+    // Check for disconnected nodes (no edges at all)
+    for (const auto& [id, node] : _nodes) {
+        bool has_incoming = _reverse_edges.find(id) != _reverse_edges.end() && !_reverse_edges.at(id).empty();
+        bool has_outgoing = _edges.find(id) != _edges.end() && !_edges.at(id).empty();
+
+        // Input nodes should have outgoing edges, output nodes should have incoming
+        // Nodes in the middle should have both
+        if (!has_incoming && !has_outgoing) {
+            // Only warn for single-node graphs
+            if (_nodes.size() > 1) {
+                error_msg = "Node '" + id + "' is disconnected (no edges)";
+                return false;
+            }
+        }
+    }
+
+    // Check for transform/edge compatibility
+    for (const auto& [from, edges] : _edges) {
+        for (const auto& edge : edges) {
+            // Verify transform type is valid
+            switch (edge.transform_type) {
+                case PipelineEdge::FILTER_CLASS:
+                    if (edge.params.target_classes.empty()) {
+                        error_msg = "Edge " + from + "->" + edge.to_node +
+                                   " uses FILTER_CLASS but no target classes specified";
+                        return false;
+                    }
+                    break;
+                case PipelineEdge::CROP_ROI:
+                    // CROP_ROI is valid with or without target classes
+                    break;
+                case PipelineEdge::BATCH_ACCUMULATE:
+                    if (edge.params.batch_size == 0) {
+                        error_msg = "Edge " + from + "->" + edge.to_node +
+                                   " uses BATCH_ACCUMULATE but batch_size is 0";
+                        return false;
+                    }
+                    break;
+                case PipelineEdge::CROP_ROI_PADDED:
+                    if (edge.params.padding_ratio < 0.0f) {
+                        error_msg = "Edge " + from + "->" + edge.to_node +
+                                   " uses CROP_ROI_PADDED but padding_ratio is negative";
+                        return false;
+                    }
+                    break;
+                default:
+                    // Other transform types don't require specific validation
+                    break;
             }
         }
     }

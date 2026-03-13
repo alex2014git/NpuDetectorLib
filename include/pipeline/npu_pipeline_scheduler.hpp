@@ -164,6 +164,7 @@ private:
 
     // Frame tracking
     mutable std::mutex _frames_mutex;
+    std::condition_variable _frame_completion_cv;
     std::unordered_set<uint64_t> _pending_frames;
     std::unordered_set<uint64_t> _completed_frames;
 

@@ -1,5 +1,8 @@
 #include "npu_factory.hpp"
 #include "core/npu_base_impl.hpp"
+#include "core/npu_detection_impl.hpp"
+#include "core/npu_base_alg_impl.hpp"
+#include "implementations/npu_yolo_nms_impl.hpp"
 #include "implementations/npu_yolo_impl.hpp"
 #include "implementations/npu_yolov8_impl.hpp"
 #include "implementations/npu_yolov8_pose_impl.hpp"
@@ -10,10 +13,19 @@
 namespace {
     struct BaseRegistrar {
         BaseRegistrar() {
-            NpuFactory::Register(ALG_BASE, []() -> std::shared_ptr<Npu> { return std::make_shared<NpuBaseImpl>(); });
+            // ALG_BASE uses simple base implementation (no NMS)
+            NpuFactory::Register(ALG_BASE, []() -> std::shared_ptr<Npu> { return std::make_shared<NpuBaseAlgImpl>(); });
         }
     };
     static BaseRegistrar g_baseRegistrar;
+
+    struct YoloNmsRegistrar {
+        YoloNmsRegistrar() {
+            // ALG_YOLO_NMS uses YOLO with hardware NMS
+            NpuFactory::Register(ALG_YOLO_NMS, []() -> std::shared_ptr<Npu> { return std::make_shared<NpuYoloNmsImpl>(); });
+        }
+    };
+    static YoloNmsRegistrar g_yoloNmsRegistrar;
 
     struct YoloRegistrar {
         YoloRegistrar() {
@@ -45,16 +57,16 @@ namespace {
 
     struct LprRegistrar {
         LprRegistrar() {
-            // LPR uses base NPU with custom post-processing
-            NpuFactory::Register(ALG_LPR, []() -> std::shared_ptr<Npu> { return std::make_shared<NpuBaseImpl>(); });
+            // ALG_LPR uses simple base implementation (no NMS needed)
+            NpuFactory::Register(ALG_LPR, []() -> std::shared_ptr<Npu> { return std::make_shared<NpuBaseAlgImpl>(); });
         }
     };
     static LprRegistrar g_lprRegistrar;
 
     struct ClassificationRegistrar {
         ClassificationRegistrar() {
-            // Classification uses base NPU with custom post-processing
-            NpuFactory::Register(ALG_CLASSIFICATION, []() -> std::shared_ptr<Npu> { return std::make_shared<NpuBaseImpl>(); });
+            // ALG_CLASSIFICATION uses simple base implementation (no NMS needed)
+            NpuFactory::Register(ALG_CLASSIFICATION, []() -> std::shared_ptr<Npu> { return std::make_shared<NpuBaseAlgImpl>(); });
         }
     };
     static ClassificationRegistrar g_classificationRegistrar;

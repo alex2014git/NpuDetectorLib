@@ -12,6 +12,13 @@ std::vector<PipelineObject> PipelineEdge::execute(const std::vector<PipelineObje
     if (transform_type == CUSTOM && custom_transform) {
         return custom_transform(input, frame, ctx);
     }
+    // Handle transforms that need the destination node ID
+    if (transform_type == FILTER_TRACK_UNPROCESSED) {
+        return Transforms::filterUnprocessed(input, frame, ctx, to_node);
+    }
+    if (transform_type == BATCH_ACCUMULATE) {
+        return Transforms::batchAccumulate(input, frame, ctx, to_node, params);
+    }
     return makeTransform(transform_type, params)(input, frame, ctx);
 }
 

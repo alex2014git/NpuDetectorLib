@@ -125,14 +125,14 @@ bool test_multi_thread_inference() {
     std::cout << "\n[Test] Multi-Thread Inference (4 threads, 10 inferences each)" << std::endl;
 
     // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    if (!file_exists("tests/test_person_image.jpg")) {
+        std::cout << "  SKIP: test_person_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_person_image.jpg");
     if (image.empty()) {
         std::cerr << "  FAIL: Could not load test image" << std::endl;
         g_tests_failed++;
@@ -148,11 +148,11 @@ bool test_multi_thread_inference() {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     // Spawn threads
-    // Note: yolov5s.json has "yolo_nms_core": true, so we use ALG_BASE
+    // Note: yolov5s.json has "yolo_nms_core": true, so we use ALG_YOLO_NMS
     // Use stream IDs 4-7 to avoid conflict with previous tests
     for (int i = 0; i < num_threads; i++) {
         threads.emplace_back(thread_worker, i, std::ref(image), "models/yolov5s.json",
-                            ALG_BASE, inferences_per_thread, std::ref(results[i]));
+                            ALG_YOLO_NMS, inferences_per_thread, std::ref(results[i]));
     }
 
     // Wait for all threads
@@ -202,9 +202,9 @@ bool test_concurrent_initialization() {
     std::atomic<int> failure_count{0};
 
     auto init_worker = [&](int thread_id) {
-        // Note: yolov5s.json has "yolo_nms_core": true, so we use ALG_BASE
+        // Note: yolov5s.json has "yolo_nms_core": true, so we use ALG_YOLO_NMS
         // Use stream IDs 10-13 to avoid conflict with previous tests
-        auto npu = NpuFactory::CreateNpu(ALG_BASE);
+        auto npu = NpuFactory::CreateNpu(ALG_YOLO_NMS);
         if (!npu) {
             failure_count++;
             return;
@@ -245,14 +245,14 @@ bool test_mixed_algorithms_threads() {
     std::cout << "\n[Test] Mixed Algorithms in Threads" << std::endl;
 
     // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    if (!file_exists("tests/test_person_image.jpg")) {
+        std::cout << "  SKIP: test_person_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_person_image.jpg");
     if (image.empty()) {
         std::cerr << "  FAIL: Could not load test image" << std::endl;
         g_tests_failed++;
@@ -266,9 +266,9 @@ bool test_mixed_algorithms_threads() {
     };
 
     std::vector<AlgTest> algs = {
-        // Note: yolov5s.json has "yolo_nms_core": true, so we use ALG_BASE
+        // Note: yolov5s.json has "yolo_nms_core": true, so we use ALG_YOLO_NMS
         // Use stream ID 20 to avoid conflict with previous tests
-        {ALG_BASE, "models/yolov5s.json", "YOLOv5"},
+        {ALG_YOLO_NMS, "models/yolov5s.json", "YOLOv5"},
     };
 
     // Add pose if available

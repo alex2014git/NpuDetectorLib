@@ -81,8 +81,8 @@ bool test_single_detection_pipeline() {
     std::cout << "\n[Test] Single Detection Pipeline" << std::endl;
 
     // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    if (!file_exists("tests/test_car_image.jpg")) {
+        std::cout << "  SKIP: test_car_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
@@ -109,7 +109,7 @@ bool test_single_detection_pipeline() {
     TEST_ASSERT_MSG(build_result == 0, "Pipeline builds successfully");
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_car_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded");
 
     // Create image_share_t
@@ -137,8 +137,8 @@ bool test_detection_lpr_pipeline() {
     std::cout << "\n[Test] Detection + LPR Pipeline" << std::endl;
 
     // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    if (!file_exists("tests/test_car_image.jpg")) {
+        std::cout << "  SKIP: test_car_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
@@ -204,7 +204,7 @@ bool test_detection_lpr_pipeline() {
     TEST_ASSERT_MSG(build_result == 0, "Pipeline builds successfully");
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_car_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded");
 
     // Create image_share_t
@@ -246,8 +246,8 @@ bool test_parallel_pipeline() {
     std::cout << "\n[Test] Parallel Pipeline Execution" << std::endl;
 
     // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    if (!file_exists("tests/test_car_image.jpg")) {
+        std::cout << "  SKIP: test_car_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
@@ -275,7 +275,7 @@ bool test_parallel_pipeline() {
     TEST_ASSERT_MSG(build_result == 0, "Pipeline builds");
 
     // Process multiple frames
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_car_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded");
 
     auto img_share = std::make_shared<image_share_t>();
@@ -330,8 +330,8 @@ bool test_pipeline_stats() {
     std::cout << "\n[Test] Pipeline Statistics" << std::endl;
 
     // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    if (!file_exists("tests/test_car_image.jpg")) {
+        std::cout << "  SKIP: test_car_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
@@ -359,7 +359,7 @@ bool test_pipeline_stats() {
     TEST_ASSERT_MSG(build_result == 0, "Pipeline builds");
 
     // Process some frames
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_car_image.jpg");
     auto img_share = std::make_shared<image_share_t>();
     img_share->data = (void*)image.data;
     img_share->width = image.cols;

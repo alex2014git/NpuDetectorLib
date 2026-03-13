@@ -6,8 +6,11 @@
 #include <memory>
 
 enum algorithm {
+    // Generic base implementation for simple models (no NMS)
+    ALG_BASE,              // Generic/simple models: LPR, Classification
+
     // Detection models using HailoRT built-in NMS (yolo_nms_core: true in JSON)
-    ALG_BASE,              // Generic detection with HailoRT NMS
+    ALG_YOLO_NMS,          // YOLO with HailoRT hardware NMS
 
     // YOLO models with software post-processing (yolo_nms_core: false in JSON)
     ALG_YOLO_V5,           // YOLOv5-v7 detection with self NMS
@@ -17,7 +20,7 @@ enum algorithm {
     ALG_POSE,              // YOLOv8-pose (keypoint detection)
     ALG_YOLO_V8_SEG,       // YOLOv8 instance segmentation
 
-    // Non-YOLO models (no NMS needed)
+    // Non-YOLO models (use ALG_BASE implementation)
     ALG_LPR,               // License Plate Recognition
     ALG_CLASSIFICATION     // Image classification
 };
@@ -60,13 +63,14 @@ public:
 
     static algorithm str2AlgEnum(const char* enumStr) {
         static const std::unordered_map<std::string, algorithm> strToEnumMap = {
-            {"base", ALG_BASE},
-            {"yolov5", ALG_YOLO_V5},
-            {"yolov8", ALG_YOLO_V8},
-            {"yolov8_pose", ALG_POSE},
-            {"yolov8_seg", ALG_YOLO_V8_SEG},
-            {"lpr", ALG_LPR},
-            {"classification", ALG_CLASSIFICATION}
+            {"base", ALG_BASE},              // Generic/simple models (LPR, classification)
+            {"yolo_nms", ALG_YOLO_NMS},      // YOLO with hardware NMS
+            {"yolov5", ALG_YOLO_V5},         // YOLOv5 with software NMS
+            {"yolov8", ALG_YOLO_V8},         // YOLOv8 with software NMS
+            {"yolov8_pose", ALG_POSE},       // YOLOv8 pose estimation
+            {"yolov8_seg", ALG_YOLO_V8_SEG}, // YOLOv8 segmentation
+            {"lpr", ALG_LPR},                // License plate recognition
+            {"classification", ALG_CLASSIFICATION}  // Image classification
         };
         auto it = strToEnumMap.find(enumStr);
         if (it != strToEnumMap.end()) {

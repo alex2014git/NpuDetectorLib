@@ -15,7 +15,7 @@ cmake --build build
 
 # Run tests
 ./build/tests/TestExecutable --help
-./build/tests/TestExecutable -i input.mp4 -o output.mp4 -m models/yolov5s.json -a base -f 200 -t 10
+./build/tests/TestExecutable -i input.mp4 -o output.mp4 -m models/yolov5s.json -a yolo_nms -f 200 -t 10
 ```
 
 ## Git Pre-commit Hook
@@ -336,21 +336,53 @@ struct SchedulerConfig {
 
 ## Model Support Matrix
 
-| Model Type | Algorithm Enum | Node Type | Status | Notes |
-|------------|----------------|-----------|--------|-------|
-| YOLOv5 Detection | `ALG_YOLO_V5` | `NpuInferenceNode` | Ready | Standard detection |
-| YOLOv8 Detection | `ALG_YOLO_V8` | `NpuInferenceNode` | Ready | Improved accuracy |
-| YOLOv8 Pose | `ALG_POSE` | `NpuInferenceNode` | Ready | Keypoint detection |
-| YOLOv8 Seg | `ALG_YOLO_V8_SEG` | `NpuInferenceNode` | Ready | Instance segmentation |
-| LPR | `ALG_LPR` (TBD) | `NpuInferenceNode` | Pending | Need HEF model |
-| Classification | `ALG_CLASSIFICATION` (TBD) | `NpuInferenceNode` | Pending | Need HEF model |
+| Model Type | Algorithm Enum | Implementation Class | Status | Notes |
+|------------|----------------|---------------------|--------|-------|
+| Generic Base | `ALG_BASE` | `NpuBaseAlgImpl` | Ready | Simple models without NMS (LPR, Classification) |
+| YOLO w/ Hardware NMS | `ALG_YOLO_NMS` | `NpuYoloNmsImpl` | Ready | YOLO with HailoRT hardware NMS |
+| YOLOv5 Detection | `ALG_YOLO_V5` | `NpuYoloImpl` | Ready | YOLOv5-v7 with software NMS |
+| YOLOv8 Detection | `ALG_YOLO_V8` | `NpuYolov8Impl` | Ready | YOLOv8 with software NMS |
+| YOLOv8 Pose | `ALG_POSE` | `NpuYolov8PoseImpl` | Ready | Keypoint detection |
+| YOLOv8 Seg | `ALG_YOLO_V8_SEG` | `NpuYolov8SegImpl` | Ready | Instance segmentation |
+| LPR | `ALG_LPR` | `NpuBaseAlgImpl` | Ready | Uses base implementation, needs HEF model |
+| Classification | `ALG_CLASSIFICATION` | `NpuBaseAlgImpl` | Ready | Uses base implementation, needs HEF model |
+
+### Factory Registration
+
+Algorithm-to-implementation mappings in `src/factory.cpp`:
+
+| Algorithm | Implementation | Use Case |
+|-----------|---------------|----------|
+| `ALG_BASE` | `NpuBaseAlgImpl` | Generic/simple models without NMS |
+| `ALG_YOLO_NMS` | `NpuYoloNmsImpl` | YOLO with hardware NMS (yolo_nms_core: true) |
+| `ALG_YOLO_V5` | `NpuYoloImpl` | YOLOv5-v7 with software NMS |
+| `ALG_YOLO_V8` | `NpuYolov8Impl` | YOLOv8 with software NMS |
+| `ALG_POSE` | `NpuYolov8PoseImpl` | YOLOv8 pose estimation |
+| `ALG_YOLO_V8_SEG` | `NpuYolov8SegImpl` | YOLOv8 instance segmentation |
+| `ALG_LPR` | `NpuBaseAlgImpl` | License plate recognition |
+| `ALG_CLASSIFICATION` | `NpuBaseAlgImpl` | Image classification |
+
+### Algorithm String Mapping
+
+| String | Enum | Description |
+|--------|------|-------------|
+| `base` | `ALG_BASE` | Generic base implementation |
+| `yolo_nms` | `ALG_YOLO_NMS` | YOLO with hardware NMS |
+| `yolov5` | `ALG_YOLO_V5` | YOLOv5 detection |
+| `yolov8` | `ALG_YOLO_V8` | YOLOv8 detection |
+| `yolov8_pose` | `ALG_POSE` | Pose estimation |
+| `yolov8_seg` | `ALG_YOLO_V8_SEG` | Instance segmentation |
+| `lpr` | `ALG_LPR` | License plate recognition |
+| `classification` | `ALG_CLASSIFICATION` | Image classification |
 
 ### Adding New Model Types
 
 1. Add algorithm enum to `npu.hpp`
-2. Implement post-processing in `src/yolov8/` or `src/`
-3. Add JSON config template to `models/`
-4. Update model support matrix in this doc
+2. Implement post-processing in `src/yolov8/` or `src/algorithms/`
+3. Create implementation class inheriting from `NpuBaseImpl` or `NpuBaseAlgImpl`
+4. Register in `src/factory.cpp`
+5. Add JSON config template to `models/`
+6. Update model support matrix in this doc
 
 ## Code Validation Guidelines
 

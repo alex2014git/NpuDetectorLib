@@ -55,25 +55,25 @@ bool file_exists(const std::string& path) {
     return false;
 }
 
-// Test: Basic inference on test image with YOLOv5s
+// Test: Basic inference on test image with YOLOv5s (using hardware NMS)
 bool test_yolov5s_inference() {
-    std::cout << "\n[Test] YOLOv5s Inference on Test Image" << std::endl;
+    std::cout << "\n[Test] YOLOv5s Inference on Test Image (hardware NMS)" << std::endl;
 
-    // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    // Check test image exists (use person image for detection tests)
+    if (!file_exists("tests/test_person_image.jpg")) {
+        std::cout << "  SKIP: tests/test_person_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_person_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded successfully");
 
-    // Note: yolov5s.json has "yolo_nms_core": true, meaning it uses Hailo's built-in NMS
-    // Therefore we must use ALG_BASE (not ALG_YOLO_V5) which handles the NMS output format
-    auto npu = NpuFactory::CreateNpu(ALG_BASE);
-    TEST_ASSERT_MSG(npu != nullptr, "NpuFactory creates ALG_BASE instance");
+    // yolov5s.json has "yolo_nms_core": true, meaning it uses Hailo's built-in NMS
+    // Therefore we must use ALG_YOLO_NMS which handles the hardware NMS output format
+    auto npu = NpuFactory::CreateNpu(ALG_YOLO_NMS);
+    TEST_ASSERT_MSG(npu != nullptr, "NpuFactory creates ALG_YOLO_NMS instance");
 
     int init_result = npu->Initialize("models/yolov5s.json", 0);
     TEST_ASSERT_MSG(init_result >= 0, "Initialize() returns success");
@@ -91,6 +91,9 @@ bool test_yolov5s_inference() {
 
     std::cout << "  Detected " << num_detections << " objects" << std::endl;
 
+    // Validate: expect at least 1 person detected in person image
+    TEST_ASSERT_MSG(num_detections > 0, "Person image should have detections");
+
     // Cleanup
     npu->Release();
 
@@ -101,29 +104,29 @@ bool test_yolov5s_inference() {
 bool test_yolov8_inference() {
     std::cout << "\n[Test] YOLOv8 Inference on Test Image" << std::endl;
 
-    // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    // Check test image exists (use person image for detection tests)
+    if (!file_exists("tests/test_person_image.jpg")) {
+        std::cout << "  SKIP: test_person_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
 
-    // Check if yolov8 model config exists (use LP detection config as proxy)
-    if (!file_exists("models/yolov8s_lp.json")) {
-        std::cout << "  SKIP: No YOLOv8 config available" << std::endl;
+    // Check if yolov8s config exists (use main yolov8s as proxy)
+    if (!file_exists("models/yolov8s.json")) {
+        std::cout << "  SKIP: yolov8s.json not available" << std::endl;
         g_tests_passed++;
         return true;
     }
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_person_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded successfully");
 
     // Create and initialize NPU
     auto npu = NpuFactory::CreateNpu(ALG_YOLO_V8);
     TEST_ASSERT_MSG(npu != nullptr, "NpuFactory creates ALG_YOLO_V8 instance");
 
-    int init_result = npu->Initialize("models/yolov8s_lp.json", 0);
+    int init_result = npu->Initialize("models/yolov8s.json", 0);
     if (init_result < 0) {
         std::cout << "  SKIP: YOLOv8 model initialization failed (det_v8.hef may be missing)" << std::endl;
         g_tests_passed++;
@@ -153,15 +156,15 @@ bool test_yolov8_inference() {
 bool test_pose_inference() {
     std::cout << "\n[Test] YOLOv8s Pose Inference on Test Image" << std::endl;
 
-    // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    // Check test image exists (use person image for pose tests)
+    if (!file_exists("tests/test_person_image.jpg")) {
+        std::cout << "  SKIP: test_person_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_person_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded successfully");
 
     // Create and initialize NPU
@@ -194,15 +197,15 @@ bool test_pose_inference() {
 bool test_segmentation_inference() {
     std::cout << "\n[Test] YOLOv8s Segmentation Inference on Test Image" << std::endl;
 
-    // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    // Check test image exists (use car image for segmentation tests)
+    if (!file_exists("tests/test_car_image.jpg")) {
+        std::cout << "  SKIP: test_car_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_car_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded successfully");
 
     // Create and initialize NPU
@@ -235,19 +238,19 @@ bool test_segmentation_inference() {
 bool test_inference_consistency() {
     std::cout << "\n[Test] Inference Consistency Check" << std::endl;
 
-    // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    // Check test image exists (use person image for consistency tests)
+    if (!file_exists("tests/test_person_image.jpg")) {
+        std::cout << "  SKIP: test_person_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_person_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded successfully");
 
-    // Use ALG_BASE since yolov5s has yolo_nms_core=true
-    auto npu = NpuFactory::CreateNpu(ALG_BASE);
+    // Use ALG_YOLO_NMS since yolov5s has yolo_nms_core=true
+    auto npu = NpuFactory::CreateNpu(ALG_YOLO_NMS);
     TEST_ASSERT_MSG(npu != nullptr, "NpuFactory creates instance");
 
     // Use a different stream ID (1) to avoid conflict with previous tests
@@ -286,19 +289,19 @@ bool test_inference_consistency() {
 bool test_draw_result() {
     std::cout << "\n[Test] Draw Result Functionality" << std::endl;
 
-    // Check test image exists
-    if (!file_exists("tests/test_image.jpg")) {
-        std::cout << "  SKIP: test_image.jpg not found" << std::endl;
+    // Check test image exists (use person image for draw tests)
+    if (!file_exists("tests/test_person_image.jpg")) {
+        std::cout << "  SKIP: test_person_image.jpg not found" << std::endl;
         g_tests_passed++;
         return true;
     }
 
     // Load test image
-    cv::Mat image = cv::imread("tests/test_image.jpg");
+    cv::Mat image = cv::imread("tests/test_person_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test image loaded successfully");
 
-    // Use ALG_BASE since yolov5s has yolo_nms_core=true
-    auto npu = NpuFactory::CreateNpu(ALG_BASE);
+    // Use ALG_YOLO_NMS since yolov5s has yolo_nms_core=true
+    auto npu = NpuFactory::CreateNpu(ALG_YOLO_NMS);
     TEST_ASSERT_MSG(npu != nullptr, "NpuFactory creates instance");
 
     // Use a different stream ID (2) to avoid conflict with previous tests

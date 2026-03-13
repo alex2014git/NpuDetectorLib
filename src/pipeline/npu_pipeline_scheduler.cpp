@@ -18,6 +18,22 @@ PipelineScheduler::~PipelineScheduler() {
 
 // Initialize scheduler with graph
 void PipelineScheduler::initialize(const PipelineGraph& graph, const SchedulerConfig& config) {
+    // Validate scheduler configuration
+    if (config.strategy == SchedulerConfig::PARALLEL || config.strategy == SchedulerConfig::BATCHED) {
+        if (config.thread_pool_size == 0) {
+            throw std::invalid_argument("PARALLEL/BATCHED strategy requires thread_pool_size > 0");
+        }
+        if (config.max_concurrent_frames == 0) {
+            throw std::invalid_argument("max_concurrent_frames must be > 0");
+        }
+    }
+
+    if (config.strategy == SchedulerConfig::BATCHED) {
+        if (config.batch_timeout.count() <= 0) {
+            throw std::invalid_argument("BATCHED strategy requires batch_timeout > 0");
+        }
+    }
+
     _config = config;
 
     // Create thread pool for parallel/batched execution
@@ -28,6 +44,11 @@ void PipelineScheduler::initialize(const PipelineGraph& graph, const SchedulerCo
 
     // Build execution order
     buildExecutionOrder(graph);
+
+    // Validate that execution order was built successfully
+    if (_execution_order.empty() && !graph.empty()) {
+        throw std::runtime_error("Failed to build execution order - graph may have cycles");
+    }
 
     _initialized.store(true);
     _running.store(true);
@@ -139,13 +160,20 @@ void PipelineScheduler::runSequential(uint64_t frame_id, PipelineContext& ctx) {
 
 // Parallel execution
 void PipelineScheduler::runParallel(uint64_t frame_id, PipelineContext& ctx) {
-    std::vector<std::future<void>> futures;
+    std::unordered_map<std::string, std::shared_ptr<std::promise<void>>> node_promises;
     std::unordered_map<std::string, std::future<void>> node_futures;
 
+    // First, create all promises and futures
     for (const auto& task : _execution_order) {
-        // Wait for input nodes to complete
-        auto future = _thread_pool->enqueue([this, &task, frame_id, &ctx, &node_futures]() {
-            // Wait for dependencies
+        auto promise = std::make_shared<std::promise<void>>();
+        node_promises[task.node_id] = promise;
+        node_futures[task.node_id] = promise->get_future();
+    }
+
+    // Then enqueue tasks that wait on their dependencies
+    for (const auto& task : _execution_order) {
+        _thread_pool->enqueue([this, &task, frame_id, &ctx, &node_promises, &node_futures]() {
+            // Wait for dependencies first
             for (const auto& input_node : task.input_nodes) {
                 auto it = node_futures.find(input_node);
                 if (it != node_futures.end()) {
@@ -155,9 +183,13 @@ void PipelineScheduler::runParallel(uint64_t frame_id, PipelineContext& ctx) {
 
             // Execute this node
             executeNode(task, frame_id, ctx);
-        });
 
-        node_futures[task.node_id] = std::move(future);
+            // Signal completion
+            auto it = node_promises.find(task.node_id);
+            if (it != node_promises.end()) {
+                it->second->set_value();
+            }
+        });
     }
 
     // Wait for all nodes to complete
@@ -165,11 +197,16 @@ void PipelineScheduler::runParallel(uint64_t frame_id, PipelineContext& ctx) {
         future.wait();
     }
 
+    // Mark frame complete and notify
+    auto& frame = ctx.getFrame(frame_id);
+    frame.markComplete();
+
     {
         std::lock_guard<std::mutex> lock(_frames_mutex);
         _pending_frames.erase(frame_id);
         _completed_frames.insert(frame_id);
     }
+    _frame_completion_cv.notify_all();
 
     _total_frames.fetch_add(1);
 }
@@ -177,11 +214,19 @@ void PipelineScheduler::runParallel(uint64_t frame_id, PipelineContext& ctx) {
 // Batched execution
 void PipelineScheduler::runBatched(uint64_t frame_id, PipelineContext& ctx) {
     // Similar to parallel but with batch accumulation
-    std::vector<std::future<void>> futures;
+    std::unordered_map<std::string, std::shared_ptr<std::promise<void>>> node_promises;
     std::unordered_map<std::string, std::future<void>> node_futures;
 
+    // First, create all promises and futures
     for (const auto& task : _execution_order) {
-        auto future = _thread_pool->enqueue([this, &task, frame_id, &ctx, &node_futures]() {
+        auto promise = std::make_shared<std::promise<void>>();
+        node_promises[task.node_id] = promise;
+        node_futures[task.node_id] = promise->get_future();
+    }
+
+    // Then enqueue tasks
+    for (const auto& task : _execution_order) {
+        _thread_pool->enqueue([this, &task, frame_id, &ctx, &node_promises, &node_futures]() {
             // Wait for dependencies
             for (const auto& input_node : task.input_nodes) {
                 auto it = node_futures.find(input_node);
@@ -196,9 +241,13 @@ void PipelineScheduler::runBatched(uint64_t frame_id, PipelineContext& ctx) {
             } else {
                 executeNode(task, frame_id, ctx);
             }
-        });
 
-        node_futures[task.node_id] = std::move(future);
+            // Signal completion
+            auto it = node_promises.find(task.node_id);
+            if (it != node_promises.end()) {
+                it->second->set_value();
+            }
+        });
     }
 
     // Wait for all nodes
@@ -206,11 +255,16 @@ void PipelineScheduler::runBatched(uint64_t frame_id, PipelineContext& ctx) {
         future.wait();
     }
 
+    // Mark frame complete and notify
+    auto& frame = ctx.getFrame(frame_id);
+    frame.markComplete();
+
     {
         std::lock_guard<std::mutex> lock(_frames_mutex);
         _pending_frames.erase(frame_id);
         _completed_frames.insert(frame_id);
     }
+    _frame_completion_cv.notify_all();
 
     _total_frames.fetch_add(1);
 }
@@ -372,8 +426,10 @@ std::vector<PipelineObject> PipelineScheduler::applyTransforms(
 // Wait for specific frame
 void PipelineScheduler::waitForFrame(uint64_t frame_id) {
     std::unique_lock<std::mutex> lock(_frames_mutex);
-    // Wait until frame is no longer pending
-    // This is simplified - in practice would use condition variable
+    // Wait until frame is in completed set
+    _frame_completion_cv.wait(lock, [this, frame_id] {
+        return _completed_frames.find(frame_id) != _completed_frames.end();
+    });
 }
 
 // Wait for all pending frames

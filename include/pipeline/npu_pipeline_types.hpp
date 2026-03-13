@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <mutex>
 #include <variant>
 #include <memory>
 #include <chrono>
@@ -91,12 +92,44 @@ struct TrackState {
     // Generic processing flags (node_name -> processed)
     std::unordered_map<std::string, bool> processed_by;
 
+    // Mutex for thread-safe access to processed_by - use shared_ptr since mutex is not copyable
+    mutable std::shared_ptr<std::mutex> processed_by_mutex;
+
+    // Constructor initializes mutex
+    TrackState() : processed_by_mutex(std::make_shared<std::mutex>()) {}
+
+    // Copy constructor - don't copy mutex, create new one
+    TrackState(const TrackState& other)
+        : id(other.id), last_roi(other.last_roi),
+          frames_tracked(other.frames_tracked),
+          frames_since_update(other.frames_since_update),
+          first_seen(other.first_seen), last_seen(other.last_seen),
+          processed_by(other.processed_by),
+          processed_by_mutex(std::make_shared<std::mutex>()) {}
+
+    // Copy assignment
+    TrackState& operator=(const TrackState& other) {
+        if (this != &other) {
+            id = other.id;
+            last_roi = other.last_roi;
+            frames_tracked = other.frames_tracked;
+            frames_since_update = other.frames_since_update;
+            first_seen = other.first_seen;
+            last_seen = other.last_seen;
+            processed_by = other.processed_by;
+            // Don't copy mutex, keep existing one
+        }
+        return *this;
+    }
+
     bool wasProcessed(const std::string& node) const {
+        std::lock_guard<std::mutex> lock(*processed_by_mutex);
         auto it = processed_by.find(node);
         return it != processed_by.end() && it->second;
     }
 
     void markProcessed(const std::string& node) {
+        std::lock_guard<std::mutex> lock(*processed_by_mutex);
         processed_by[node] = true;
     }
 
