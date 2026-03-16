@@ -280,21 +280,39 @@ void PipelineScheduler::executeNode(const NodeTask& task,
     // Gather inputs from upstream nodes
     auto inputs = gatherInputs(task, frame_id, ctx);
 
-    // Apply input edge transforms
+    // For input nodes (no upstream), create input from source frame
     auto& frame = ctx.getFrame(frame_id);
+    if (inputs.empty() && task.input_nodes.empty() && frame.source_frame) {
+        PipelineObject source_obj;
+        source_obj.frame_id = frame_id;
+        source_obj.object_id = 0;  // Source frame is object 0
+        // Full frame ROI (normalized)
+        source_obj.roi.x_min = 0.0f;
+        source_obj.roi.y_min = 0.0f;
+        source_obj.roi.x_max = 1.0f;
+        source_obj.roi.y_max = 1.0f;
+        source_obj.cropped_image = frame.source_frame;
+        inputs.push_back(std::move(source_obj));
+    }
+
+    // Apply input edge transforms
     inputs = applyTransforms(inputs, task.input_edges, frame, ctx);
 
     // Execute node
     std::vector<PipelineObject> outputs;
-    if (task.supports_batching && inputs.size() > 1) {
+    if (task.supports_batching) {
+        // Always use processBatch for nodes that support it (handles single and batch)
         std::vector<uint64_t> frame_ids(inputs.size(), frame_id);
         outputs = task.node->processBatch(inputs, frame_ids, ctx);
-    } else {
-        // Process one by one
+    } else if (inputs.size() > 1) {
+        // Process multiple inputs one by one for non-batching nodes
         outputs.reserve(inputs.size());
         for (const auto& input : inputs) {
             outputs.push_back(task.node->processObject(input, frame, ctx));
         }
+    } else if (!inputs.empty()) {
+        // Single input for non-batching node
+        outputs.push_back(task.node->processObject(inputs[0], frame, ctx));
     }
 
     // Write outputs
@@ -323,6 +341,20 @@ void PipelineScheduler::executeNodeBatched(const NodeTask& task,
     // Gather inputs
     auto inputs = gatherInputs(task, frame_id, ctx);
     auto& frame = ctx.getFrame(frame_id);
+
+    // For input nodes (no upstream), create input from source frame
+    if (inputs.empty() && task.input_nodes.empty() && frame.source_frame) {
+        PipelineObject source_obj;
+        source_obj.frame_id = frame_id;
+        source_obj.object_id = 0;
+        source_obj.roi.x_min = 0.0f;
+        source_obj.roi.y_min = 0.0f;
+        source_obj.roi.x_max = 1.0f;
+        source_obj.roi.y_max = 1.0f;
+        source_obj.cropped_image = frame.source_frame;
+        inputs.push_back(std::move(source_obj));
+    }
+
     inputs = applyTransforms(inputs, task.input_edges, frame, ctx);
 
     // Add to batch accumulator
@@ -350,7 +382,8 @@ void PipelineScheduler::executeNodeBatched(const NodeTask& task,
 // Process batch accumulator for a node
 void PipelineScheduler::processBatchAccumulator(const NodeTask& task,
                                                 PipelineContext& ctx) {
-    if (!ctx.isBatchReady(task.node_id)) {
+    // Skip if batch is empty - process if ready OR if we're flushing (has items)
+    if (ctx.peekBatch(task.node_id).isEmpty()) {
         return;
     }
 

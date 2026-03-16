@@ -112,6 +112,11 @@ public:
     // Enable batching
     bool supportsBatching() const override { return true; }
 
+    // Single object processing (runs inference for single input)
+    PipelineObject processObject(const PipelineObject& input,
+                                  const FrameResults& frame,
+                                  PipelineContext& ctx) override;
+
     // Efficient batch inference
     std::vector<PipelineObject> processBatch(
         const std::vector<PipelineObject>& inputs,

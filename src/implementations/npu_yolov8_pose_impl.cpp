@@ -78,6 +78,10 @@ int NpuYolov8PoseImpl::Detect(image_share_t imgData, bool needPreProcess)
     MnpReturnCode ReadOutRet = MnpReturnCode::NO_DATA_AVAILABLE;
     size_t num_dets = 0;
 
+    // Clear previous detection results before processing
+    _objects.clear();
+    _objects.shrink_to_fit();
+
     ReadOutRet = NpuPorcessing<uint8_t>(imgData, needPreProcess);
     if (ReadOutRet == MnpReturnCode::SUCCESS)
     {

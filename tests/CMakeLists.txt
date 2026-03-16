@@ -4,6 +4,7 @@ add_executable(TestExecutable main.cpp)
 include_directories(
     ${PROJECT_SOURCE_DIR}/src/include
     ${PROJECT_SOURCE_DIR}/src/include/async_backend
+    ${PROJECT_SOURCE_DIR}/src/async_backend
 )
 
 # Link libraries

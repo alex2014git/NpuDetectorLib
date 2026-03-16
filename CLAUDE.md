@@ -150,7 +150,7 @@ This is a C++17 library for Hailo NPU inference, supporting YOLO object detectio
 
 **Npu Interface** (`include/npu.hpp`)
 - Abstract base class defining the NPU API
-- Algorithm types: `ALG_BASE`, `ALG_YOLO_V5`, `ALG_YOLO_V8`, `ALG_POSE`, `ALG_YOLO_V8_SEG`
+- Algorithm types: `ALG_BASE`, `ALG_YOLO_V5`, `ALG_YOLO_V8`, `ALG_POSE`, `ALG_YOLO_V8_SEG`, `ALG_LPR`, `ALG_CLASSIFICATION`
 
 **Implementation Classes** (`src/include/*.hpp`, `src/*.cpp`)
 - `NpuBaseImpl`: Base implementation with common functionality (preprocessing, NPU init, result drawing)
@@ -344,8 +344,8 @@ struct SchedulerConfig {
 | YOLOv8 Detection | `ALG_YOLO_V8` | `NpuYolov8Impl` | Ready | YOLOv8 with software NMS |
 | YOLOv8 Pose | `ALG_POSE` | `NpuYolov8PoseImpl` | Ready | Keypoint detection |
 | YOLOv8 Seg | `ALG_YOLO_V8_SEG` | `NpuYolov8SegImpl` | Ready | Instance segmentation |
-| LPR | `ALG_LPR` | `NpuBaseAlgImpl` | Ready | Uses base implementation, needs HEF model |
-| Classification | `ALG_CLASSIFICATION` | `NpuBaseAlgImpl` | Ready | Uses base implementation, needs HEF model |
+| LPR | `ALG_LPR` | `NpuBaseAlgImpl` | Ready | Pipeline-ready with CTC decoding |
+| Classification | `ALG_CLASSIFICATION` | `NpuBaseAlgImpl` | Ready | Pipeline-ready with argmax decoding |
 
 ### Factory Registration
 
@@ -397,6 +397,14 @@ Checklist for validating pipeline code:
 - [ ] **Error Handling** - Node initialization failures caught and reported
 - [ ] **Resource Cleanup** - `release()` called on all nodes in destructor
 - [ ] **Frame Lifecycle** - Old frames cleaned up to prevent memory growth
+- [ ] **Batched Scheduler Flush** - `processBatchAccumulator` must process remaining items even when not "ready"
+
+### Critical Bug Fixes (Reference)
+
+**BATCHED Scheduler Flush (2026-03-16):**
+- Issue: `processBatchAccumulator` checked `isBatchReady()` before processing, causing items to never flush when batch size not reached
+- Fix: Changed to check `peekBatch().isEmpty()` - process any accumulated items when flushing
+- Location: `src/pipeline/npu_pipeline_scheduler.cpp:processBatchAccumulator()`
 
 ### Critical Files Reference
 
@@ -451,6 +459,8 @@ PreProcessing() → Infer() (async) → ReadOutputById() → PostProcessing()
 | YOLOv8 Detection | `src/npu_yolov8_impl.cpp` | YOLOv8 detection post-processing |
 | YOLOv8 Pose | `src/npu_yolov8_pose_impl.cpp` | Keypoint detection post-processing |
 | YOLOv8 Segmentation | `src/npu_yolov8_seg_impl.cpp` | Instance segmentation post-processing |
+| Pipeline Scheduler | `src/pipeline/npu_pipeline_scheduler.cpp` | Execution scheduling (Sequential/Parallel/Batched) |
+| Pipeline Node | `src/pipeline/npu_pipeline_node.cpp` | NPU inference node with result extraction |
 | Async Backend | `src/async_backend.cpp` | Thread-safe async inference wrapper |
 | NPU Handler | `src/async_backend/npu_handler.cpp` | HailoRT model wrapper |
 | Post-process (YOLOv8) | `src/yolov8/yolov8_postprocess.cpp` | Detection NMS |

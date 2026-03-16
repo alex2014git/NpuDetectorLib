@@ -1,0 +1,16 @@
+{
+    "name": "classification",
+    "model_path": "models/resnet_v1_18.hef",
+    "size": [224, 224, 3],
+    "output_length": 1000,
+    "output_names": ["resnet_v1_18/softmax1"],
+    "preprocessing": {
+        "resize": [224, 224],
+        "color_format": "RGB",
+        "normalize": {
+            "mean": [123.675, 116.28, 103.53],
+            "scale": [0.01712475, 0.017507, 0.01742925]
+        }
+    },
+    "confidence_threshold": 0.5
+}

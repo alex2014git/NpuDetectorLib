@@ -35,6 +35,13 @@ protected:
 
     // Optional post-processing hook - subclasses can override if they use the base Detect()
     virtual int PostProcess(image_share_t imgData) { (void)imgData; return 0; }
+
+public:
+    // Get detection results from the last inference (for pipeline access)
+    const std::vector<object_roi_t>& GetDetectionResults() const { return _objects; }
+
+    // Clear detection results
+    void ClearDetectionResults() { _objects.clear(); _objects.shrink_to_fit(); }
 };
 
 #endif // _NPU_DETECTION_IMPL_H

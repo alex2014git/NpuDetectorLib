@@ -83,7 +83,8 @@ Available validation tests:
 - `TestModelLoading` - Verifies model JSON configs can be parsed and HEF files are accessible
 - `TestSingleInference` - Tests inference produces valid outputs on test images (person, car, plate)
 - `TestFactoryMapping` - Validates algorithm-to-implementation factory mappings
-- `TestLprClassification` - Tests LPR and Classification model functionality
+- `TestLprClassification` - Tests LPR and Classification model functionality with post-processing
+- `TestPipelineLpr` - Tests Detection + LPR multi-model pipeline with crop and batch transforms
 - `TestThreadSafety` - Verifies concurrent access from multiple threads
 - `TestAsyncBackend` - Stress tests the async backend
 
@@ -93,6 +94,7 @@ Run individual tests:
 ./build/tests/TestSingleInference
 ./build/tests/TestFactoryMapping
 ./build/tests/TestLprClassification
+./build/tests/TestPipelineLpr
 ./build/tests/TestThreadSafety
 ./build/tests/TestAsyncBackend
 ```

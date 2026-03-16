@@ -44,6 +44,10 @@ int NpuYolov8Impl::Detect(image_share_t imgData, bool needPreProcess)
     MnpReturnCode ReadOutRet = MnpReturnCode::NO_DATA_AVAILABLE;
     std::vector<float32_t> detectionsResult;
 
+    // Clear previous detection results before processing
+    _objects.clear();
+    _objects.shrink_to_fit();
+
     ReadOutRet = NpuPorcessing<uint8_t>(imgData, needPreProcess);
     if (ReadOutRet == MnpReturnCode::SUCCESS)
     {
