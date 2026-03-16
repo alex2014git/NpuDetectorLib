@@ -93,7 +93,6 @@ std::vector<DetectionAndMask> decode_masks(std::vector<std::pair<HailoDetection,
       padding_top = 0.0f;
       padding_left = (mask_width - final_mask_width) / 2;
     }
-    //printf("final size %dx%d, top-left %d,%d\n", final_mask_width, final_mask_height, padding_top, padding_left);
     std::vector<DetectionAndMask> detections_and_cropped_masks(detections_and_masks_after_nms.size(), 
                                                                 DetectionAndMask({
                                                                     HailoDetection(HailoBBox(0.0,0.0,0.0,0.0), "", 0.0), 
@@ -118,20 +117,13 @@ std::vector<DetectionAndMask> decode_masks(std::vector<std::pair<HailoDetection,
         sigmoid(mask_product.data(), mask_product.size());
       #ifdef LETTER_BOX
         cv::Mat mask = xarray_to_mat(mask_product);
-        //printf("1 mask size %dx%d\n", mask.cols, mask.rows);
         cv::Rect roi(cvRound(padding_left), cvRound(padding_top), final_mask_width, final_mask_height);
         // Create a new cv::Mat for the ROI
         cv::Mat roi_mat = mask(roi).clone();
         mask = roi_mat;
-        //printf("2 mask size %dx%d\n", mask.cols, mask.rows);
       #else
         cv::Mat mask = xarray_to_mat(mask_product).clone();
       #endif
-        /*  //here resize 160*160 to org_image_width*org_image_height
-        cv::resize(mask, mask, cv::Size(org_image_width, org_image_height), 0, 0, cv::INTER_LINEAR);
-        printf("mask size %dx%d\n", mask.rows, mask.cols);
-        mask = crop_mask(mask, curr_detection.get_bbox());
-        */
 
         detections_and_cropped_masks[i] = DetectionAndMask({curr_detection, mask});
     }

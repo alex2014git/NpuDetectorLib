@@ -17,9 +17,6 @@
 
 #pragma once
 
-// #ifndef _EXAMPLE_COMMON_H_
-// #define _EXAMPLE_COMMON_H_
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "hailo/hailort.h"
@@ -58,4 +55,3 @@ public:
     uint32_t m_width;
     hailo_vstream_info_t m_vstream_info;
 };
-// #endif /* _EXAMPLE_COMMON_H_ */

@@ -301,15 +301,13 @@ MnpReturnCode MultiNetworkPipeline::ReleaseAllResource()
 
     for (int i = 0; i < NUMBER_OF_DEV_SUPPORTED; i++) {
         if (vdevices[i] != NULL) {
-            //std::cout << "Release Device-" << i << "Address: " << &vdevices[i] << std::endl;
             (void) hailo_release_vdevice(vdevices[i]);
-            
-        }        
+
+        }
     }
 
     hailo_device_found = 0;
-    
-    //std::cout << "Release Done" << std::endl;
+
     return RetCode;
 }
 
@@ -357,8 +355,6 @@ size_t MultiNetworkPipeline::InitializeHailo()
             params.scheduling_algorithm = HAILO_SCHEDULING_ALGORITHM_ROUND_ROBIN;
             params.multi_process_service = false;       //Set default to false, we can try to support this later
             status = hailo_create_vdevice(&params, &vdevices[i]);
-            
-            //std::cout << "Allocated vDevice Address: " << &vdevices[i] << std::endl;
 
             REQUIRE_SUCCESS_CHECK(status, init_exit, "Failed to create hailo_create_vdevice");
 
@@ -556,7 +552,6 @@ MnpReturnCode MultiNetworkPipeline::AddNetwork(uint32_t device_id, const stNetwo
             qp_zp_scale_t transformScale = {in_vstream_info.quant_info.qp_zp,
                                             in_vstream_info.quant_info.qp_scale};
             pHailoStreamInfoObj->NetVstreamInputQuantInfo[i] = transformScale;
-            //std::cout << "input(" <<  in_vstream_info.name << ")stream format type: " << in_vstream_info.format.type << ", quant info scale = " << transformScale.qp_scale << " zero point = " << transformScale.qp_zp << std::endl;
 
         }
     }
@@ -629,7 +624,6 @@ MnpReturnCode MultiNetworkPipeline::AddNetwork(uint32_t device_id, const stNetwo
                                             out_vstream_info.quant_info.qp_scale};
             pHailoStreamInfoObj->NetVstreamOutputQuantInfo[i] = transformScale;
             pHailoStreamInfoObj->NetVstreamOutputVstreamInfo[i] = out_vstream_info;
-            //std::cout << "output(" <<  out_vstream_info.name << ")stream format type: " << out_vstream_info.format.type << ", quant info scale = " << transformScale.qp_scale << " zero point = " << transformScale.qp_zp << std::endl;
 
         }
     }

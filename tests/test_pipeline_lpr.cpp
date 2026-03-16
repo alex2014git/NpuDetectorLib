@@ -97,7 +97,7 @@ bool test_single_detection_pipeline() {
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
     // Add detection node
-    int node_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov5s.json");
+    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_NMS, "models/yolov5s.json");
     if (node_result != 0) {
         std::cout << "  SKIP: Could not add detection node (model may be missing)" << std::endl;
         g_tests_passed++;
@@ -168,8 +168,9 @@ bool test_detection_lpr_pipeline() {
     int init_result = pipeline.initialize(config);
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
-    // Add detection node
-    int det_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov8s_lp.json");
+    // Add detection node - use YOLOv8 for license plate detection
+    // yolov8s_lp.json has yolo_nms_core: true (hardware NMS), use ALG_YOLO_NMS
+    int det_result = pipeline.addNpuNode("detector", ALG_YOLO_NMS, "models/yolov8s_lp.json");
     if (det_result != 0) {
         std::cout << "  SKIP: Could not add detection node" << std::endl;
         g_tests_passed++;
@@ -262,8 +263,8 @@ bool test_parallel_pipeline() {
     int init_result = pipeline.initialize(config);
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
-    // Add detection node
-    int node_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov5s.json");
+    // Add detection node - yolov5s.json has hardware NMS, use ALG_YOLO_NMS
+    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_NMS, "models/yolov5s.json");
     if (node_result != 0) {
         std::cout << "  SKIP: Could not add detection node" << std::endl;
         g_tests_passed++;
@@ -309,8 +310,8 @@ bool test_pipeline_edges() {
     int init_result = pipeline.initialize(config);
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
-    // Add detection node
-    int node_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov5s.json");
+    // Add detection node - yolov5s.json has hardware NMS, use ALG_YOLO_NMS
+    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_NMS, "models/yolov5s.json");
     if (node_result != 0) {
         std::cout << "  SKIP: Could not add detection node" << std::endl;
         g_tests_passed++;
@@ -346,8 +347,8 @@ bool test_pipeline_stats() {
     int init_result = pipeline.initialize(config);
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
-    // Add detection node
-    int node_result = pipeline.addNpuNode("detector", ALG_BASE, "models/yolov5s.json");
+    // Add detection node - yolov5s.json has hardware NMS, use ALG_YOLO_NMS
+    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_NMS, "models/yolov5s.json");
     if (node_result != 0) {
         std::cout << "  SKIP: Could not add detection node" << std::endl;
         g_tests_passed++;
