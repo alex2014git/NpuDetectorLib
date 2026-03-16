@@ -184,6 +184,17 @@ PipelineObject NpuInferenceNode::processObject(const PipelineObject& input,
                 LprResult lpr_result;
                 lpr_result.text = decode_lpr_output(output_buffer.data(), static_cast<int>(output_buffer.size()));
                 lpr_result.confidence = 1.0f;
+
+                // Debug logging
+                std::cout << "[NpuInferenceNode] LPR output buffer size: " << output_buffer.size() << std::endl;
+                std::cout << "[NpuInferenceNode] LPR raw output (first 10 values): ";
+                for (size_t i = 0; i < std::min(size_t(10), output_buffer.size()); ++i) {
+                    std::cout << output_buffer[i] << " ";
+                }
+                std::cout << std::endl;
+                std::cout << "[NpuInferenceNode] LPR decoded text: '" << lpr_result.text
+                          << "' (confidence: " << lpr_result.confidence << ")" << std::endl;
+
                 output.setResult(_name, lpr_result);
             }
             break;
@@ -194,6 +205,17 @@ PipelineObject NpuInferenceNode::processObject(const PipelineObject& input,
                 const auto& output_buffer = alg_impl->GetRawOutputFloat()[0];
                 ClassificationResult cls_result = decode_classification_output(
                     output_buffer.data(), static_cast<int>(output_buffer.size()), {});
+
+                // Debug logging
+                std::cout << "[NpuInferenceNode] Classification output buffer size: " << output_buffer.size() << std::endl;
+                std::cout << "[NpuInferenceNode] Classification raw output (first 10 values): ";
+                for (size_t i = 0; i < std::min(size_t(10), output_buffer.size()); ++i) {
+                    std::cout << output_buffer[i] << " ";
+                }
+                std::cout << std::endl;
+                std::cout << "[NpuInferenceNode] Classification result: class_id=" << cls_result.class_id
+                          << ", confidence=" << cls_result.confidence << std::endl;
+
                 output.setResult(_name, cls_result);
             }
             break;
@@ -341,6 +363,17 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
                         LprResult lpr_result;
                         lpr_result.text = decode_lpr_output(output_buffer.data(), static_cast<int>(output_buffer.size()));
                         lpr_result.confidence = 1.0f; // Could calculate from output if needed
+
+                        // Debug logging
+                        std::cout << "[NpuInferenceNode] Batch LPR output buffer size: " << output_buffer.size() << std::endl;
+                        std::cout << "[NpuInferenceNode] Batch LPR raw output (first 10 values): ";
+                        for (size_t j = 0; j < std::min(size_t(10), output_buffer.size()); ++j) {
+                            std::cout << output_buffer[j] << " ";
+                        }
+                        std::cout << std::endl;
+                        std::cout << "[NpuInferenceNode] Batch LPR decoded text: '" << lpr_result.text
+                                  << "' (confidence: " << lpr_result.confidence << ")" << std::endl;
+
                         out.setResult(_name, lpr_result);
                     }
                     break;
@@ -353,6 +386,17 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
                         // Get labels from the NPU implementation if available
                         ClassificationResult cls_result = decode_classification_output(
                             output_buffer.data(), static_cast<int>(output_buffer.size()), {});
+
+                        // Debug logging
+                        std::cout << "[NpuInferenceNode] Batch Classification output buffer size: " << output_buffer.size() << std::endl;
+                        std::cout << "[NpuInferenceNode] Batch Classification raw output (first 10 values): ";
+                        for (size_t j = 0; j < std::min(size_t(10), output_buffer.size()); ++j) {
+                            std::cout << output_buffer[j] << " ";
+                        }
+                        std::cout << std::endl;
+                        std::cout << "[NpuInferenceNode] Batch Classification result: class_id=" << cls_result.class_id
+                                  << ", confidence=" << cls_result.confidence << std::endl;
+
                         out.setResult(_name, cls_result);
                     }
                     break;

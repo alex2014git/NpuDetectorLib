@@ -130,6 +130,18 @@ bool test_lpr_inference() {
     auto& lpr_results = output.node_outputs["lpr"];
     std::cout << "  LPR processed " << lpr_results.size() << " plates" << std::endl;
 
+    // Debug: Print detailed LPR results
+    std::cout << "  [DEBUG] LPR results details:" << std::endl;
+    for (size_t i = 0; i < lpr_results.size(); ++i) {
+        std::cout << "    Result[" << i << "]: ";
+        if (auto lpr = lpr_results[i].getResult<LprResult>("lpr")) {
+            std::cout << "text='" << lpr->text << "', confidence=" << lpr->confidence;
+            std::cout << ", text_length=" << lpr->text.length() << std::endl;
+        } else {
+            std::cout << "(no LprResult)" << std::endl;
+        }
+    }
+
     for (auto& obj : lpr_results) {
         if (auto lpr = obj.getResult<LprResult>("lpr")) {
             std::cout << "    Plate: " << lpr->text << " (conf: " << lpr->confidence << ")" << std::endl;
@@ -199,6 +211,23 @@ bool test_classification_inference() {
 
     auto& cls_results = output.node_outputs["classifier"];
     std::cout << "  Classifier processed " << cls_results.size() << " images" << std::endl;
+
+    // Debug: Print detailed classification results
+    std::cout << "  [DEBUG] Classification results details:" << std::endl;
+    for (size_t i = 0; i < cls_results.size(); ++i) {
+        std::cout << "    Result[" << i << "]: ";
+        if (auto cls = cls_results[i].getResult<ClassificationResult>("classifier")) {
+            std::cout << "class_id=" << cls->class_id << ", confidence=" << cls->confidence;
+            std::cout << ", label='" << cls->label << "'" << std::endl;
+            // Validate confidence is in valid range [0, 1]
+            if (cls->confidence < 0.0f || cls->confidence > 1.0f) {
+                std::cout << "    WARNING: Confidence value " << cls->confidence
+                          << " is outside expected range [0, 1]" << std::endl;
+            }
+        } else {
+            std::cout << "(no ClassificationResult)" << std::endl;
+        }
+    }
 
     for (auto& obj : cls_results) {
         if (auto cls = obj.getResult<ClassificationResult>("classifier")) {

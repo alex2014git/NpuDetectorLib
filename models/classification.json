@@ -4,6 +4,8 @@
     "size": [224, 224, 3],
     "output_length": 1000,
     "output_names": ["resnet_v1_18/softmax1"],
+    "out_format": "HAILO_FORMAT_TYPE_FLOAT32",
+    "in_format": "HAILO_FORMAT_TYPE_UINT8",
     "preprocessing": {
         "resize": [224, 224],
         "color_format": "RGB",
