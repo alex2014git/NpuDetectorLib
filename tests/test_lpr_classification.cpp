@@ -113,12 +113,10 @@ bool test_lpr_inference() {
     cv::Mat image = cv::imread("tests/test_plate_image.jpg");
     TEST_ASSERT_MSG(!image.empty(), "Test plate image loaded successfully");
 
-    // Resize to LPR input size (168x48)
-    cv::Mat resized_image;
-    cv::resize(image, resized_image, cv::Size(168, 48));
-
-    // Create image share
-    auto img_share = create_image_share(resized_image);
+    // The image is already 168x48, no need to resize
+    // Just use it directly - the pipeline will handle preprocessing
+    // Create image share with the original image
+    auto img_share = create_image_share(image);
 
     // Process frame
     FrameOutput output = pipeline.process(img_share);

@@ -170,7 +170,20 @@ PipelineObject NpuInferenceNode::processObject(const PipelineObject& input,
     }
 
     // Run inference
-    int ret = _npu->Detect(img_data, true);
+    // Skip preprocessing if image already matches model input size (avoid letterbox padding)
+    bool needPreProcess = true;
+    if (_npu) {
+        int model_width = _npu->GetModelWidth();
+        int model_height = _npu->GetModelHeight();
+        // Check if image dimensions match model input dimensions
+        // Support both orientations (some configs may have swapped width/height)
+        bool size_matches_direct = (img_data.width == model_width && img_data.height == model_height);
+        bool size_matches_swapped = (img_data.width == model_height && img_data.height == model_width);
+        if (size_matches_direct || size_matches_swapped) {
+            needPreProcess = false;
+        }
+    }
+    int ret = _npu->Detect(img_data, needPreProcess);
     if (ret < 0) {
         return output;
     }
@@ -351,7 +364,20 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
         img_data.ch = batch_images[i].channels();
 
         // Run inference
-        int ret = _npu->Detect(img_data, true);
+        // Skip preprocessing if image already matches model input size (avoid letterbox padding)
+        bool needPreProcess = true;
+        if (_npu) {
+            int model_width = _npu->GetModelWidth();
+            int model_height = _npu->GetModelHeight();
+            // Check if image dimensions match model input dimensions
+            // Support both orientations (some configs may have swapped width/height)
+            bool size_matches_direct = (img_data.width == model_width && img_data.height == model_height);
+            bool size_matches_swapped = (img_data.width == model_height && img_data.height == model_width);
+            if (size_matches_direct || size_matches_swapped) {
+                needPreProcess = false;
+            }
+        }
+        int ret = _npu->Detect(img_data, needPreProcess);
         if (ret >= 0) {
             // Get algorithm-specific results
             switch (_algorithm_type) {

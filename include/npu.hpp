@@ -61,6 +61,12 @@ public:
     /// @brief 释放npu
     virtual void Release() = 0;
 
+    /// @brief Get model input width
+    virtual int GetModelWidth() const = 0;
+
+    /// @brief Get model input height
+    virtual int GetModelHeight() const = 0;
+
     static algorithm str2AlgEnum(const char* enumStr) {
         static const std::unordered_map<std::string, algorithm> strToEnumMap = {
             {"base", ALG_BASE},              // Generic/simple models (LPR, classification)

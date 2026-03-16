@@ -37,6 +37,12 @@ public:
     /// @brief Release NPU resources
     void Release() override;
 
+    /// @brief Get model input width
+    int GetModelWidth() const override { return _model_width; }
+
+    /// @brief Get model input height
+    int GetModelHeight() const override { return _model_height; }
+
 protected:
     // Configuration and state
     bool _initialized = false;
