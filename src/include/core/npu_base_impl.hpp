@@ -2,6 +2,7 @@
 #define _NPU_BASE_API_IMPL_H
 
 #include "npu.hpp"
+#include "npu_result_types.hpp"
 #include <vector>
 #include <string>
 #include <functional>
@@ -28,8 +29,21 @@ public:
     /// @brief Get algorithm version
     std::string GetVersion() override;
 
-    // Pure virtual - subclasses must implement detection/inference logic
-    virtual int Detect(image_share_t imgData, bool needPreProcess) = 0;
+    // Two-Phase Inference API
+    // Phase 1: Run inference (NPU execution) - implemented in base
+    int Infer(image_share_t imgData, bool needPreProcess) override;
+
+    // Phase 2: Post-process results (CPU decoding) - subclasses must implement
+    virtual int PostProcess(image_share_t imgData) = 0;
+
+    // Get parsed results - subclasses must implement
+    virtual std::vector<npu::NpuResult> GetResults() const = 0;
+
+    // Clear results for next inference - subclasses must implement
+    virtual void ClearResults() = 0;
+
+    // Legacy API - implemented in base (calls Infer() + PostProcess())
+    int Detect(image_share_t imgData, bool needPreProcess) override;
 
     // Pure virtual - subclasses must implement result visualization
     virtual void DrawResult(image_share_t imgData, bool needFormat) = 0;

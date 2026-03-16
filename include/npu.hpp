@@ -1,5 +1,6 @@
 #ifndef _NPU_API_H
 #define _NPU_API_H
+#include "npu_result_types.hpp"
 #include <vector>
 #include <string>
 #include <functional>
@@ -54,6 +55,32 @@ public:
     /// @return 算法版本号
     virtual std::string GetVersion() = 0;
 
+    // Two-Phase Inference API (NEW)
+    // Phase 1: Run inference (NPU execution)
+    /// @brief Run inference on the input image
+    /// @param imgData Input image data
+    /// @param needPreProcess Whether to apply preprocessing (letterbox, resize, etc.)
+    /// @return 0 on success, negative on error
+    virtual int Infer(image_share_t imgData, bool needPreProcess) = 0;
+
+    // Phase 2: Post-process results (CPU decoding)
+    /// @brief Post-process the inference results
+    /// @param imgData Input image data (for scaling/reference if needed)
+    /// @return 0 on success, negative on error
+    virtual int PostProcess(image_share_t imgData) = 0;
+
+    /// @brief Get parsed results from the last inference
+    /// @return Vector of results (use std::visit to access specific types)
+    virtual std::vector<npu::NpuResult> GetResults() const = 0;
+
+    /// @brief Clear results for next inference
+    virtual void ClearResults() = 0;
+
+    // Legacy API - calls Infer() + PostProcess()
+    /// @brief Run full detection pipeline (inference + post-processing)
+    /// @param imgData Input image data
+    /// @param needPreProcess Whether to apply preprocessing
+    /// @return 0 on success, negative on error
     virtual int Detect(image_share_t imgData, bool needPreProcess) = 0;
 
     virtual void DrawResult(image_share_t imgData, bool needFormat) = 0;

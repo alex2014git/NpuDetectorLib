@@ -20,7 +20,8 @@ public:
     void DrawResult(image_share_t imgData, bool needFormat) override;
 
 protected:
-    int PostProcess(image_share_t imgData) override { (void)imgData; return 0; }
+    // Phase 2: Post-process results
+    int PostProcess(image_share_t imgData) override;
 
 private:
     std::pair<std::vector<KeyPt>, std::vector<PairPairs>> _pose_extra;

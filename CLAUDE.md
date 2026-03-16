@@ -334,6 +334,79 @@ struct SchedulerConfig {
 3. Decrease if latency > target (batch_timeout tradeoff)
 4. Monitor with `pipeline.getStats()`
 
+## Two-Phase Inference API
+
+The NPU interface provides a two-phase API for fine-grained control over inference:
+
+```cpp
+// Phase 1: Run inference (NPU execution)
+npu->Infer(image_data, needPreProcess);
+
+// Phase 2: Post-process (CPU decoding)
+npu->PostProcess(image_data);
+
+// Get unified results
+auto results = npu->GetResults();
+for (const auto& result : results) {
+    std::visit([](auto&& arg) {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, npu::DetectionResult>) {
+            // Handle detection: arg.class_id, arg.confidence, arg.bbox
+        } else if constexpr (std::is_same_v<T, npu::LprResult>) {
+            // Handle LPR: arg.text, arg.confidence
+        } else if constexpr (std::is_same_v<T, npu::ClassificationResult>) {
+            // Handle classification: arg.class_id, arg.label, arg.confidence
+        }
+    }, result);
+}
+
+// Clear for next inference
+npu->ClearResults();
+```
+
+### Legacy API (Backward Compatible)
+
+The `Detect()` method still works and is equivalent to `Infer()` + `PostProcess()`:
+
+```cpp
+// Equivalent to: Infer() + PostProcess()
+npu->Detect(image_data, needPreProcess);
+auto results = npu->GetResults();
+```
+
+### Algorithm-Specific Result Types
+
+Each algorithm type returns results through the unified `npu::NpuResult` variant:
+
+| Algorithm | Result Type | Access Pattern |
+|-----------|-------------|----------------|
+| `ALG_YOLO_V5/V8/NMS` | `npu::DetectionResult` | `result.bbox.x_min`, `result.class_id`, `result.confidence` |
+| `ALG_POSE` | `npu::PoseResult` | `result.detection`, `result.keypoints[]` |
+| `ALG_YOLO_V8_SEG` | `npu::SegmentationResult` | `result.detection`, `result.mask[]` |
+| `ALG_LPR` | `npu::LprResult` | `result.text`, `result.confidence` |
+| `ALG_CLASSIFICATION` | `npu::ClassificationResult` | `result.class_id`, `result.label`, `result.top_k[]` |
+| `ALG_BASE` | None (raw outputs) | Use `GetRawOutputFloat()` or `GetRawOutputUint8()` |
+
+### Raw Output Access (ALG_BASE)
+
+For models without built-in post-processing, access raw NPU outputs:
+
+```cpp
+auto npu = NpuFactory::CreateNpu(ALG_BASE);
+npu->Initialize("models/custom.json", 0);
+npu->Infer(image, true);
+
+// Access raw output tensors
+const auto& float_outputs = npu->GetRawOutputFloat();   // Float format
+const auto& uint8_outputs = npu->GetRawOutputUint8();   // Quantized format
+
+// Process outputs manually
+for (const auto& tensor : float_outputs) {
+    // tensor is std::vector<float>
+    process_tensor(tensor.data(), tensor.size());
+}
+```
+
 ## Model Support Matrix
 
 | Model Type | Algorithm Enum | Implementation Class | Status | Notes |

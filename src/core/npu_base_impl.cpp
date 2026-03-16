@@ -252,6 +252,21 @@ MnpReturnCode NpuBaseImpl::NpuPorcessing(image_share_t imgData, bool needPreProc
 template MnpReturnCode NpuBaseImpl::NpuPorcessing<uint8_t>(image_share_t imgData, bool needPreProcess);
 // template MnpReturnCode NpuBaseImpl::NpuPorcessing<float>(image_share_t imgData, bool needPreProcess);
 
+// Two-Phase API Implementation
+// Phase 1: Run inference (NPU execution)
+int NpuBaseImpl::Infer(image_share_t imgData, bool needPreProcess) {
+    // NPU input is always uint8_t, output format (_out_format) can be float or uint8
+    MnpReturnCode ret = NpuPorcessing<uint8_t>(imgData, needPreProcess);
+    return (ret == MnpReturnCode::SUCCESS) ? 0 : -1;
+}
+
+// Legacy API - calls Infer() + PostProcess()
+int NpuBaseImpl::Detect(image_share_t imgData, bool needPreProcess) {
+    int ret = Infer(imgData, needPreProcess);
+    if (ret < 0) return ret;
+    return PostProcess(imgData);
+}
+
 int NpuBaseImpl::Initialize(std::string configJsonFile, int streamId) {
     int result = InitConfig(configJsonFile, streamId);
     if (result < 0) {

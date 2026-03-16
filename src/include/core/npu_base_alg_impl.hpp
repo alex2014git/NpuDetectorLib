@@ -10,7 +10,7 @@ struct _object_roi;
 
 // Simple base implementation for generic models (LPR, Classification)
 // Does NOT include NMS logic - just runs inference and stores raw outputs
-// Used by ALG_BASE, ALG_LPR, and ALG_CLASSIFICATION
+// Used by ALG_BASE - provides raw outputs without post-processing
 class NpuBaseAlgImpl : public NpuBaseImpl {
 public:
     NpuBaseAlgImpl();
@@ -19,8 +19,12 @@ public:
     // Initialize from JSON config
     int Initialize(std::string configJsonFile, int streamId) override;
 
-    // Run inference - just does inference, no NMS processing
-    // Returns 0 on success, negative on error
+    // Two-phase API - no post-processing for ALG_BASE (raw outputs only)
+    int PostProcess(image_share_t imgData) override;  // No-op for ALG_BASE
+    std::vector<npu::NpuResult> GetResults() const override;  // Returns empty
+    void ClearResults() override;  // No-op
+
+    // Legacy API - implemented as Infer() + (no-op PostProcess)
     int Detect(image_share_t imgData, bool needPreProcess) override;
 
     // Draw results (basic or empty for models without visualizable results)
@@ -35,10 +39,6 @@ public:
     const std::vector<hailo_vstream_info_t>& GetVstreamInfo() const { return _vstream_infos; }
 
 protected:
-    // Raw outputs are already stored in base class buffers
-    // Subclasses can override PostProcess() for custom processing
-    virtual int PostProcess(image_share_t imgData);
-
     // For storing simple detection results if needed
     std::vector<object_roi_t> _results;
 };

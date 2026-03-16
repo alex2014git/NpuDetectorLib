@@ -17,41 +17,36 @@ int NpuBaseAlgImpl::Initialize(std::string configJsonFile, int streamId) {
     return 0;
 }
 
+// Phase 1: Run inference
 int NpuBaseAlgImpl::Detect(image_share_t imgData, bool needPreProcess) {
-    // Run inference through base class template method
-    MnpReturnCode ReadOutRet = NpuPorcessing<uint8_t>(imgData, needPreProcess);
-
-    if (ReadOutRet != MnpReturnCode::SUCCESS) {
-        std::cerr << "NpuBaseAlgImpl: Inference failed" << std::endl;
-        return -1;
+    // Run inference through base class Infer()
+    int ret = Infer(imgData, needPreProcess);
+    if (ret < 0) {
+        return ret;
     }
-
-    // Call post-processing (subclasses can override)
+    // No post-processing for ALG_BASE - return raw output count
     return PostProcess(imgData);
 }
 
+// Phase 2: Post-process (no-op for ALG_BASE)
 int NpuBaseAlgImpl::PostProcess(image_share_t imgData) {
     (void)imgData;
+    // ALG_BASE returns raw outputs without decoding
+    // Users should call GetRawOutputFloat() or GetRawOutputUint8() instead
+    return 0;
+}
 
-    // Base implementation just returns success (0 detections)
-    // Subclasses (LPR, Classification) will override this to parse outputs
-    // For now, we just verify that output buffers are populated
+// Get results (empty for ALG_BASE - use GetRawOutputFloat/Uint8 instead)
+std::vector<npu::NpuResult> NpuBaseAlgImpl::GetResults() const {
+    // ALG_BASE doesn't produce parsed results - returns empty vector
+    // Users should access raw outputs via GetRawOutputFloat() or GetRawOutputUint8()
+    return {};
+}
 
-    if (_out_format == HAILO_FORMAT_TYPE_FLOAT32) {
-        // Check that we have output in float buffer
-        if (_output_buffer_float.empty()) {
-            return 0;  // No output
-        }
-        // Return number of output tensors (not detections)
-        return static_cast<int>(_output_buffer_float.size());
-    } else {
-        // Check uint8 buffer
-        if (_output_buffer_uint8.empty()) {
-            return 0;  // No output
-        }
-        // Return number of output tensors
-        return static_cast<int>(_output_buffer_uint8.size());
-    }
+// Clear results (no-op for ALG_BASE)
+void NpuBaseAlgImpl::ClearResults() {
+    // ALG_BASE doesn't store parsed results - nothing to clear
+    // Raw output buffers are managed by base class
 }
 
 void NpuBaseAlgImpl::DrawResult(image_share_t imgData, bool needFormat) {

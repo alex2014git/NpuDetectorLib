@@ -101,6 +101,78 @@ Run individual tests:
 
 All tests should report "ALL TESTS PASSED" on successful completion.
 
+## Pipeline API
+
+The library provides a unified two-phase inference API for all algorithm types:
+
+```cpp
+// Create NPU instance
+auto npu = NpuFactory::CreateNpu(ALG_LPR);
+npu->Initialize("models/lpr.json", 0);
+
+// Two-phase inference
+npu->Infer(image, true);      // Run NPU inference
+npu->PostProcess(image);      // Decode results (CTC for LPR, argmax for classification)
+
+// Get results - unified interface for all algorithms
+auto results = npu->GetResults();
+for (const auto& result : results) {
+    std::visit([](auto&& arg) {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, DetectionResult>) {
+            // Handle detection
+        } else if constexpr (std::is_same_v<T, LprResult>) {
+            // Handle LPR: arg.text, arg.confidence
+        } else if constexpr (std::is_same_v<T, ClassificationResult>) {
+            // Handle classification: arg.class_id, arg.label
+        }
+    }, result);
+}
+
+// Clear for next inference
+npu->ClearResults();
+```
+
+Legacy `Detect()` API (backward compatible):
+```cpp
+// Equivalent to: Infer() + PostProcess()
+npu->Detect(image, true);
+auto results = npu->GetResults();
+```
+
+### Algorithm Implementations
+
+Each algorithm type has a dedicated implementation class:
+
+| Algorithm | Class | Post-Processing |
+|-----------|-------|-----------------|
+| LPR | `NpuLprImpl` | CTC decoding |
+| Classification | `NpuClassificationImpl` | Argmax + top-k |
+| YOLOv5 | `NpuYoloImpl` | NMS + bbox extraction |
+| YOLOv8 | `NpuYolov8Impl` | NMS + bbox extraction |
+| YOLOv8 Pose | `NpuYolov8PoseImpl` | Keypoint detection |
+| YOLOv8 Seg | `NpuYolov8SegImpl` | Instance segmentation |
+| Base/Generic | `NpuBaseAlgImpl` | None (raw outputs) |
+
+### Raw Output Access (ALG_BASE)
+
+For algorithms without built-in post-processing, access raw NPU outputs:
+
+```cpp
+auto npu = NpuFactory::CreateNpu(ALG_BASE);
+npu->Initialize("models/custom.json", 0);
+npu->Infer(image, true);
+
+// Access raw output tensors
+const auto& float_outputs = npu->GetRawOutputFloat();   // Float format
+const auto& uint8_outputs = npu->GetRawOutputUint8();   // Quantized format
+
+// Process outputs manually
+for (const auto& tensor : float_outputs) {
+    process_tensor(tensor.data(), tensor.size());
+}
+```
+
 ## Multi-Model Pipeline Usage
 
 The multi-model pipeline API enables chaining multiple NPU models for complex inference workflows.

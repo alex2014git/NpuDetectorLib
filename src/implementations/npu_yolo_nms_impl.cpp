@@ -29,14 +29,11 @@ int NpuYoloNmsImpl::Initialize(std::string configJsonFile, int streamId) {
 }
 
 int NpuYoloNmsImpl::Detect(image_share_t imgData, bool needPreProcess) {
-    // Run inference through base class template method
-    MnpReturnCode ReadOutRet = NpuPorcessing<uint8_t>(imgData, needPreProcess);
-
-    if (ReadOutRet != MnpReturnCode::SUCCESS) {
-        return 0;
+    // Two-phase API: Infer() + PostProcess()
+    int ret = Infer(imgData, needPreProcess);
+    if (ret < 0) {
+        return ret;
     }
-
-    // Parse results based on NMS mode
     return PostProcess(imgData);
 }
 

@@ -91,30 +91,31 @@ int NpuYoloImpl::Initialize(std::string configJsonFile, int streamId)
 
 int NpuYoloImpl::Detect(image_share_t imgData, bool needPreProcess)
 {
-    MnpReturnCode ReadOutRet = MnpReturnCode::NO_DATA_AVAILABLE;
-    std::vector<float32_t> detectionsResult;
-    int class_id = 1;
+    // Two-phase API: Infer() + PostProcess()
+    int ret = Infer(imgData, needPreProcess);
+    if (ret < 0) {
+        return ret;
+    }
+    return PostProcess(imgData);
+}
+
+int NpuYoloImpl::PostProcess(image_share_t imgData)
+{
+    (void)imgData;  // Unused but kept for API compatibility
 
     // Clear previous detection results before processing
     _objects.clear();
     _objects.shrink_to_fit();
 
-    ReadOutRet = NpuPorcessing<uint8_t>(imgData, needPreProcess);
-    if (ReadOutRet == MnpReturnCode::SUCCESS)
-    {
-#ifdef TIME_TRACE_DEBUG
-      std::chrono::duration<double> total_time;
-      std::chrono::time_point<std::chrono::system_clock> t_start = std::chrono::high_resolution_clock::now();
-#endif
-      size_t num_dets = 0;
-      detectionsResult.clear();
-      num_dets = YoloPostProcessing(_output_buffer_uint8, _quantization_info, detectionsResult);
-#ifdef TIME_TRACE_DEBUG
-      std::chrono::time_point<std::chrono::system_clock> t_end = std::chrono::high_resolution_clock::now();
-      total_time = t_end - t_start;
-      std::cout << "-I- postprocessing run time: " << (double)total_time.count() << " sec" << std::endl;
-#endif
-      for (int k = 0; k < num_dets; k++) {
+    // Process output buffers from inference
+    if (_output_buffer_uint8.empty()) {
+        return 0;  // No output to process
+    }
+
+    std::vector<float32_t> detectionsResult;
+    size_t num_dets = YoloPostProcessing(_output_buffer_uint8, _quantization_info, detectionsResult);
+
+    for (size_t k = 0; k < num_dets; k++) {
         object_roi_t cobj;
         float conf = detectionsResult[k*6+5];
         if (conf < _conf_threshold)
@@ -123,17 +124,14 @@ int NpuYoloImpl::Detect(image_share_t imgData, bool needPreProcess)
         cobj.x_min = detectionsResult[k*6+1];
         cobj.y_max = detectionsResult[k*6+2];
         cobj.x_max = detectionsResult[k*6+3];
-        int category = detectionsResult[k*6+4];
+        int category = static_cast<int>(detectionsResult[k*6+4]);
         cobj.confidence = conf;
         cobj.category = category;
-        cobj.name = cobj.name = GetFinalLabel(conf, _labels[category]);
-      #ifdef TIME_TRACE_DEBUG
-        printf("T result cobj.category %d, conf %f\n", cobj.category, cobj.confidence);
-      #endif
+        cobj.name = GetFinalLabel(conf, _labels[category]);
         _objects.push_back(cobj);
-      }
     }
-    return _objects.size();
+
+    return static_cast<int>(_objects.size());
 }
 
 

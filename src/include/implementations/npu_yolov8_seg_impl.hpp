@@ -20,12 +20,15 @@ public:
     void DrawResult(image_share_t imgData, bool needFormat) override;
 
 protected:
-    int PostProcess(image_share_t imgData) override { (void)imgData; return 0; }
+    // PostProcess with needPreProcess for segmentation mask sizing
+    int PostProcess(image_share_t imgData) override { return PostProcess(imgData, _last_need_preprocess); }
+    int PostProcess(image_share_t imgData, bool needPreProcess);
 
 private:
     std::vector<int32_t> _feature_map_sizes;
     std::vector<int32_t> _mask_sizes;
     std::vector<cv::Mat> _filtered_masks;
+    bool _last_need_preprocess = true;  // Store needPreProcess from Detect()
 
     cv::Mat crop_mask(cv::Mat& mask, int x_min, int y_min, int x_max, int y_max);
 };

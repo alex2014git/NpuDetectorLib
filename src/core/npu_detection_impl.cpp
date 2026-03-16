@@ -10,6 +10,32 @@ NpuDetectionImpl::~NpuDetectionImpl() {
     // Cleanup handled by base
 }
 
+// Get unified results (converts _objects to NpuResult)
+std::vector<npu::NpuResult> NpuDetectionImpl::GetResults() const {
+    std::vector<npu::NpuResult> results;
+    results.reserve(_objects.size());
+
+    for (const auto& obj : _objects) {
+        npu::DetectionResult det;
+        det.class_id = obj.category;
+        det.class_name = obj.name;
+        det.confidence = obj.confidence;
+        det.bbox.x_min = obj.x_min;
+        det.bbox.y_min = obj.y_min;
+        det.bbox.x_max = obj.x_max;
+        det.bbox.y_max = obj.y_max;
+        results.push_back(det);
+    }
+
+    return results;
+}
+
+// Clear results for next inference
+void NpuDetectionImpl::ClearResults() {
+    _objects.clear();
+    _objects.shrink_to_fit();
+}
+
 // Draw detection results on image
 void NpuDetectionImpl::DrawResult(image_share_t imgData, bool needFormat) {
     int width = imgData.width;

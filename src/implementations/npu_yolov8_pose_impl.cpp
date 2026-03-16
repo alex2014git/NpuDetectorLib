@@ -75,29 +75,28 @@ int NpuYolov8PoseImpl::Initialize(std::string configJsonFile, int streamId)
 
 int NpuYolov8PoseImpl::Detect(image_share_t imgData, bool needPreProcess)
 {
-    MnpReturnCode ReadOutRet = MnpReturnCode::NO_DATA_AVAILABLE;
-    size_t num_dets = 0;
+    // Two-phase API: Infer() + PostProcess()
+    int ret = Infer(imgData, needPreProcess);
+    if (ret < 0) {
+        return ret;
+    }
+    return PostProcess(imgData);
+}
+
+int NpuYolov8PoseImpl::PostProcess(image_share_t imgData)
+{
+    (void)imgData;  // Unused but kept for API compatibility
 
     // Clear previous detection results before processing
     _objects.clear();
     _objects.shrink_to_fit();
 
-    ReadOutRet = NpuPorcessing<uint8_t>(imgData, needPreProcess);
-    if (ReadOutRet == MnpReturnCode::SUCCESS)
-    {
-#ifdef TIME_TRACE_DEBUG
-      std::chrono::duration<double> total_time;
-      std::chrono::time_point<std::chrono::system_clock> t_start = std::chrono::high_resolution_clock::now();
-#endif
-
-      num_dets = post_processing_all(_output_buffer_uint8, _vstream_infos, _pose_extra);
-#ifdef TIME_TRACE_DEBUG
-      std::chrono::time_point<std::chrono::system_clock> t_end = std::chrono::high_resolution_clock::now();
-      total_time = t_end - t_start;
-      std::cout << "-I- postprocessing run time: " << (double)total_time.count() << " sec" << std::endl;
-#endif
+    if (_output_buffer_uint8.empty()) {
+        return 0;  // No output to process
     }
-    return num_dets;
+
+    post_processing_all(_output_buffer_uint8, _vstream_infos, _pose_extra);
+    return static_cast<int>(_objects.size());
 }
 
 void NpuYolov8PoseImpl::DrawResult(image_share_t imgData, bool needFormat)

@@ -15,10 +15,24 @@ public:
     ~NpuDetectionImpl();  // Not override - base has no virtual destructor
 
     // Detection interface - subclasses must implement post-processing
-    virtual int Detect(image_share_t imgData, bool needPreProcess) = 0;
+    // Legacy API: Detect() = Infer() + PostProcess()
+    int Detect(image_share_t imgData, bool needPreProcess) override = 0;
+
+    // Phase 2: Post-process - subclasses must implement
+    virtual int PostProcess(image_share_t imgData) = 0;
+
+    // Get unified results (converts _objects to NpuResult)
+    std::vector<npu::NpuResult> GetResults() const override;
+
+    // Clear results for next inference
+    void ClearResults() override;
 
     // Common detection functionality
     void DrawResult(image_share_t imgData, bool needFormat) override;
+
+    // Legacy detection-specific getters
+    const std::vector<object_roi_t>& GetDetectionResults() const { return _objects; }
+    void ClearDetectionResults() { _objects.clear(); _objects.shrink_to_fit(); }
 
 protected:
     // Detection-specific members
@@ -32,16 +46,6 @@ protected:
 
     // Hardware NMS parsing - used by subclasses with hardware NMS support
     int ParseHardwareNmsResults(image_share_t imgData);
-
-    // Optional post-processing hook - subclasses can override if they use the base Detect()
-    virtual int PostProcess(image_share_t imgData) { (void)imgData; return 0; }
-
-public:
-    // Get detection results from the last inference (for pipeline access)
-    const std::vector<object_roi_t>& GetDetectionResults() const { return _objects; }
-
-    // Clear detection results
-    void ClearDetectionResults() { _objects.clear(); _objects.shrink_to_fit(); }
 };
 
 #endif // _NPU_DETECTION_IMPL_H

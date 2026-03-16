@@ -18,7 +18,8 @@ public:
     int Detect(image_share_t imgData, bool needPreProcess) override;
 
 protected:
-    int PostProcess(image_share_t imgData) override { (void)imgData; return 0; }
+    // Phase 2: Post-process results
+    int PostProcess(image_share_t imgData) override;
 
 private:
     bool _out_sigmoid = true;
