@@ -97,7 +97,7 @@ bool test_single_detection_pipeline() {
     TEST_ASSERT_MSG(init_result == 0, "Pipeline initializes");
 
     // Add detection node
-    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_NMS, "models/yolov5s.json");
+    int node_result = pipeline.addNpuNode("detector", ALG_YOLO_NMS, "models/yolov8s_lp.json");
     if (node_result != 0) {
         std::cout << "  SKIP: Could not add detection node (model may be missing)" << std::endl;
         g_tests_passed++;
@@ -185,8 +185,9 @@ bool test_detection_lpr_pipeline() {
         return true;
     }
 
-    // Add edges (crop ROI and batch)
-    int edge1_result = pipeline.addEdge(Edge::cropRoi("detector", "lpr", 1)); // class 1 = license plate
+    // Add edges (crop ROI with resize to LPR input size, and batch)
+    // LPR model expects 168x48 input - resize during crop
+    int edge1_result = pipeline.addEdge(Edge::cropRoi("detector", "lpr", 1, 168, 48)); // class 1 = license plate, resize to 168x48
     if (edge1_result != 0) {
         std::cout << "  SKIP: Could not add crop edge" << std::endl;
         g_tests_passed++;
@@ -225,15 +226,40 @@ bool test_detection_lpr_pipeline() {
     auto& detections = output.node_outputs["detector"];
     std::cout << "  Detected " << detections.size() << " objects" << std::endl;
 
+    // Print detection details
+    for (size_t i = 0; i < detections.size(); ++i) {
+        if (auto det = detections[i].getResult<DetectionResult>("detector")) {
+            std::cout << "    Detection[" << i << "]: class=" << det->class_id
+                      << " conf=" << det->confidence
+                      << " bbox=[" << det->bbox.x_min << "," << det->bbox.y_min
+                      << "-" << det->bbox.x_max << "," << det->bbox.y_max << "]" << std::endl;
+        }
+    }
+
     // Check LPR results if any license plates were detected
     if (output.node_outputs.find("lpr") != output.node_outputs.end()) {
         auto& lpr_results = output.node_outputs["lpr"];
         std::cout << "  LPR processed " << lpr_results.size() << " plates" << std::endl;
 
-        for (auto& obj : lpr_results) {
-            if (auto lpr = obj.getResult<LprResult>("lpr")) {
-                std::cout << "    Plate: " << lpr->text << " (conf: " << lpr->confidence << ")" << std::endl;
+        // Detailed debug output for LPR results
+        std::cout << "  [DEBUG] LPR results details:" << std::endl;
+        bool found_valid_lpr = false;
+        for (size_t i = 0; i < lpr_results.size(); ++i) {
+            std::cout << "    Result[" << i << "]: ";
+            if (auto lpr = lpr_results[i].getResult<LprResult>("lpr")) {
+                std::cout << "text='" << lpr->text << "', confidence=" << lpr->confidence;
+                std::cout << ", text_length=" << lpr->text.length() << std::endl;
+                found_valid_lpr = true;
+
+                // Assert that LPR produces non-empty plate text
+                TEST_ASSERT_MSG(!lpr->text.empty(), "LPR produces non-empty plate text");
+            } else {
+                std::cout << "(no LprResult)" << std::endl;
             }
+        }
+
+        if (!found_valid_lpr) {
+            std::cout << "  WARNING: No valid LPR results found in output" << std::endl;
         }
     } else {
         std::cout << "  No LPR results (no license plates detected or LPR not configured)" << std::endl;
