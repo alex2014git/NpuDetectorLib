@@ -2,6 +2,8 @@
 #include "pipeline/npu_pipeline_context.hpp"
 #include <algorithm>
 #include <numeric>
+#include <cstring>
+#include <opencv2/opencv.hpp>
 
 namespace npu_pipeline {
 
@@ -133,6 +135,19 @@ std::vector<PipelineObject> cropRoi(
     std::vector<PipelineObject> output;
     output.reserve(input.size());
 
+    // Get source frame for cropping
+    if (!frame.source_frame) {
+        return output;
+    }
+
+    image_share_t* src = frame.source_frame.get();
+    if (!src->data || src->width <= 0 || src->height <= 0) {
+        return output;
+    }
+
+    // Create OpenCV Mat from source frame (no copy, just wrapper)
+    cv::Mat src_mat(src->height, src->width, CV_8UC(src->ch), src->data);
+
     for (auto obj : input) {
         // Filter by class if specified
         if (!params.target_classes.empty()) {
@@ -142,11 +157,81 @@ std::vector<PipelineObject> cropRoi(
             }
         }
 
-        // Store crop metadata for later processing
-        obj.metadata["crop_x"] = std::to_string(static_cast<int>(obj.roi.x_min));
-        obj.metadata["crop_y"] = std::to_string(static_cast<int>(obj.roi.y_min));
-        obj.metadata["crop_w"] = std::to_string(static_cast<int>(obj.roi.width()));
-        obj.metadata["crop_h"] = std::to_string(static_cast<int>(obj.roi.height()));
+        // Calculate pixel coordinates from normalized ROI
+        int x = static_cast<int>(obj.roi.x_min * src->width);
+        int y = static_cast<int>(obj.roi.y_min * src->height);
+        int w = static_cast<int>(obj.roi.width() * src->width);
+        int h = static_cast<int>(obj.roi.height() * src->height);
+
+        // Clamp to image bounds
+        x = std::max(0, x);
+        y = std::max(0, y);
+        w = std::min(w, src->width - x);
+        h = std::min(h, src->height - y);
+
+        // Skip invalid crops
+        if (w <= 0 || h <= 0) {
+            continue;
+        }
+
+        // Apply min/max size constraints if specified
+        if (params.min_crop_width > 0 && w < params.min_crop_width) {
+            continue;
+        }
+        if (params.min_crop_height > 0 && h < params.min_crop_height) {
+            continue;
+        }
+        if (params.max_crop_width > 0 && w > params.max_crop_width) {
+            continue;
+        }
+        if (params.max_crop_height > 0 && h > params.max_crop_height) {
+            continue;
+        }
+
+        // Perform the crop using OpenCV (clone() makes a deep copy)
+        cv::Rect crop_rect(x, y, w, h);
+        std::cout << "[CROP DEBUG] Cropping ROI: x=" << x << " y=" << y << " w=" << w << " h=" << h
+                  << " from source " << src->width << "x" << src->height << std::endl;
+        cv::Mat cropped_mat = src_mat(crop_rect).clone();
+
+        // Resize to target dimensions if specified (e.g., for LPR model input)
+        if (params.target_width > 0 && params.target_height > 0) {
+            cv::Mat resized_mat;
+            cv::resize(cropped_mat, resized_mat,
+                       cv::Size(params.target_width, params.target_height),
+                       0, 0, cv::INTER_LINEAR);
+            cropped_mat = std::move(resized_mat);
+            std::cout << "[CROP DEBUG] Resized crop from " << w << "x" << h
+                      << " to " << params.target_width << "x" << params.target_height << std::endl;
+        }
+
+        // Create new image_share_t for the cropped image with custom deleter
+        auto cropped = std::shared_ptr<image_share_t>(new image_share_t{},
+            [](image_share_t* img) {
+                if (img && img->data) {
+                    delete[] static_cast<uint8_t*>(img->data);
+                    img->data = nullptr;
+                }
+                delete img;
+            });
+        cropped->width = cropped_mat.cols;
+        cropped->height = cropped_mat.rows;
+        cropped->ch = src->ch;
+        cropped->data = new uint8_t[cropped->width * cropped->height * src->ch];
+
+        // Copy pixel data from OpenCV Mat to our buffer
+        memcpy(cropped->data, cropped_mat.data, cropped->width * cropped->height * src->ch);
+
+        std::cout << "[CROP DEBUG] Created cropped image: " << cropped->width << "x" << cropped->height << std::endl;
+
+        // Store crop metadata for reference
+        obj.metadata["crop_x"] = std::to_string(x);
+        obj.metadata["crop_y"] = std::to_string(y);
+        obj.metadata["crop_w"] = std::to_string(w);
+        obj.metadata["crop_h"] = std::to_string(h);
+
+        // Set the cropped image on the object
+        obj.cropped_image = std::move(cropped);
 
         output.push_back(std::move(obj));
     }

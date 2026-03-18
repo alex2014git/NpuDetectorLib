@@ -61,7 +61,7 @@ void parse_args(int argc, char **argv)
                 << " -i  input file name (default: input.mp4)\n"
                 << " -o  output file name (default: output.mp4)\n"
                 << " -m  model json file path (default: yolov5s.json)\n"
-                << " -a  running alg: base, yolov8_pose, yolov8_seg (default: base)\n"
+                << " -a  running alg: base, yolo_nms, yolov5, yolov8, yolov8_pose, yolov8_seg, lpr, classification (default: base)\n"
                 << " -f  frame count (default: 1)\n"
                 << " -t  thread count (default: 1)\n";
             exit(0);
@@ -119,7 +119,7 @@ void parse_args(int argc, char **argv)
                    " -i  input file name (default: input.mp4)\n"
                    " -o  output file name (default: output.mp4)\n"
                    " -m  model json file path (default: yolov5s.json)\n"
-                   " -a  running alg: base, yolov8_pose, yolov8_seg (default: base)\n"
+                   " -a  running alg: base, yolo_nms, yolov5, yolov8, yolov8_pose, yolov8_seg, lpr, classification (default: base)\n"
                    " -f  frame count (default: 1)\n"
                    " -t  thread count (default: 1)\n",
                    argv[0]);

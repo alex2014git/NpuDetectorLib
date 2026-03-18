@@ -54,10 +54,10 @@ int NpuYolov8SegImpl::Detect(image_share_t imgData, bool needPreProcess)
     if (ret < 0) {
         return ret;
     }
-    return PostProcess(imgData, needPreProcess);
+    return PostProcess(imgData);
 }
 
-int NpuYolov8SegImpl::PostProcess(image_share_t imgData, bool needPreProcess)
+int NpuYolov8SegImpl::PostProcess(image_share_t imgData)
 {
     // Clear previous detection results before processing
     _objects.clear();
@@ -78,7 +78,7 @@ int NpuYolov8SegImpl::PostProcess(image_share_t imgData, bool needPreProcess)
 
     // If we do the preprocess here, we know the original size. If not, we need load the original size from the model json.default:1920x1080
     // The key is the ratio, not the size.
-    if(needPreProcess) {
+    if(_last_need_preprocess) {
         _filtered_masks = filter_seg(roi, imgData.height, imgData.width, _nclasses, _labels, _conf_threshold, strides, network_dims);
     } else {
         _filtered_masks = filter_seg(roi, _mask_sizes[1], _mask_sizes[0], _nclasses, _labels, _conf_threshold, strides, network_dims);

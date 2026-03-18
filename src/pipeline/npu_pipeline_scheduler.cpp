@@ -2,6 +2,7 @@
 #include "pipeline/npu_pipeline_graph.hpp"
 #include "pipeline/npu_pipeline_node.hpp"
 #include <algorithm>
+#include <iostream>
 
 namespace npu_pipeline {
 
@@ -295,8 +296,9 @@ void PipelineScheduler::executeNode(const NodeTask& task,
         inputs.push_back(std::move(source_obj));
     }
 
-    // Apply input edge transforms
-    inputs = applyTransforms(inputs, task.input_edges, frame, ctx);
+    // Apply input edge transforms (excluding BATCH_ACCUMULATE which is handled separately)
+    auto non_batch_edges = getNonBatchInputEdges(task);
+    inputs = applyTransforms(inputs, non_batch_edges, frame, ctx);
 
     // Execute node
     std::vector<PipelineObject> outputs;
@@ -316,6 +318,11 @@ void PipelineScheduler::executeNode(const NodeTask& task,
     }
 
     // Write outputs
+    std::cout << "[BATCHED DEBUG] Node " << task.node_id << " writing " << outputs.size() << " outputs" << std::endl;
+    for (size_t i = 0; i < outputs.size(); ++i) {
+        std::cout << "[BATCHED DEBUG]   Output[" << i << "]: class_id=" << outputs[i].roi.class_id
+                  << ", conf=" << outputs[i].roi.confidence << std::endl;
+    }
     ctx.writeNodeOutput(frame_id, task.node_id, std::move(outputs));
     ctx.markNodeCompleted(frame_id, task.node_id);
 
@@ -355,7 +362,20 @@ void PipelineScheduler::executeNodeBatched(const NodeTask& task,
         inputs.push_back(std::move(source_obj));
     }
 
-    inputs = applyTransforms(inputs, task.input_edges, frame, ctx);
+    // Apply input edge transforms (excluding BATCH_ACCUMULATE which is handled separately)
+    auto non_batch_edges2 = getNonBatchInputEdges(task);
+    inputs = applyTransforms(inputs, non_batch_edges2, frame, ctx);
+
+    std::cout << "[BATCHED DEBUG] Node " << task.node_id << " has " << inputs.size()
+              << " inputs after transforms" << std::endl;
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        std::cout << "[BATCHED DEBUG]   Input[" << i << "]: class_id=" << inputs[i].roi.class_id
+                  << ", conf=" << inputs[i].roi.confidence << std::endl;
+    }
+    for (const auto& edge : non_batch_edges2) {
+        std::cout << "[BATCHED DEBUG]   Edge from " << edge.from_node
+                  << " type=" << edge.transform_type << std::endl;
+    }
 
     // Add to batch accumulator
     for (auto& obj : inputs) {
@@ -392,6 +412,14 @@ void PipelineScheduler::processBatchAccumulator(const NodeTask& task,
         return;
     }
 
+    std::cout << "[BATCH DEBUG] Processing batch for node " << task.node_id
+              << " with " << batch.size() << " items, "
+              << task.input_edges.size() << " input edges" << std::endl;
+    for (const auto& edge : task.input_edges) {
+        std::cout << "[BATCH DEBUG]   Edge: " << edge.from_node << " -> " << edge.to_node
+                  << " type=" << edge.transform_type << std::endl;
+    }
+
     // Extract frame_ids and objects
     std::vector<PipelineObject> objects;
     std::vector<uint64_t> frame_ids;
@@ -407,9 +435,15 @@ void PipelineScheduler::processBatchAccumulator(const NodeTask& task,
     auto outputs = task.node->processBatch(objects, frame_ids, ctx);
 
     // Write outputs back to respective frames
-    for (size_t i = 0; i < outputs.size(); ++i) {
-        std::vector<PipelineObject> single_output = {outputs[i]};
-        ctx.writeNodeOutput(frame_ids[i], task.node_id, std::move(single_output));
+    // Note: outputs.size() can be different from frame_ids.size() for detection models
+    // Each output has its frame_id set by the node
+    std::unordered_map<uint64_t, std::vector<PipelineObject>> outputs_by_frame;
+    for (auto& output : outputs) {
+        outputs_by_frame[output.frame_id].push_back(std::move(output));
+    }
+
+    for (auto& [fid, frame_outputs] : outputs_by_frame) {
+        ctx.writeNodeOutput(fid, task.node_id, std::move(frame_outputs));
     }
 }
 
@@ -438,6 +472,20 @@ std::vector<PipelineObject> PipelineScheduler::gatherInputs(const NodeTask& task
     return all_inputs;
 }
 
+// Get non-batch input edges for a node (filters out BATCH_ACCUMULATE edges)
+std::vector<PipelineEdge> PipelineScheduler::getNonBatchInputEdges(const NodeTask& task) const {
+    std::vector<PipelineEdge> result;
+    result.reserve(task.input_edges.size());
+
+    for (const auto& edge : task.input_edges) {
+        if (edge.transform_type != PipelineEdge::BATCH_ACCUMULATE) {
+            result.push_back(edge);
+        }
+    }
+
+    return result;
+}
+
 // Apply edge transforms
 std::vector<PipelineObject> PipelineScheduler::applyTransforms(
     const std::vector<PipelineObject>& inputs,
@@ -449,8 +497,13 @@ std::vector<PipelineObject> PipelineScheduler::applyTransforms(
 
     std::vector<PipelineObject> result = inputs;
 
+    std::cout << "[APPLY TRANSFORMS] " << inputs.size() << " inputs, " << edges.size() << " edges" << std::endl;
+
     for (const auto& edge : edges) {
+        std::cout << "[APPLY TRANSFORMS]   Applying edge " << edge.from_node << "->" << edge.to_node
+                  << " type=" << edge.transform_type << std::endl;
         result = edge.execute(result, frame, ctx);
+        std::cout << "[APPLY TRANSFORMS]   Result: " << result.size() << " objects" << std::endl;
     }
 
     return result;

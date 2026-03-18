@@ -4,40 +4,56 @@ set -e
 echo "=== Pre-commit Validation ==="
 
 # 1. Configure - MUST include both flags for validation tests
-echo "[1/8] Configuring cmake..."
+echo "[1/13] Configuring cmake..."
 cmake -S . -Bbuild -DBUILD_TESTER=ON -DBUILD_VALIDATION_TESTS=ON
 
 # 2. Build
-echo "[2/8] Building project..."
+echo "[2/13] Building project..."
 cmake --build build
 
 # 3. yolov5s test
-echo "[3/8] Running yolov5s test..."
+echo "[3/13] Running yolov5s test..."
 ./build/tests/TestExecutable -i 2.jpg
 
-# 4. yolov8_pose test
-echo "[4/8] Running yolov8_pose test..."
+# 4. yolov8s detection test
+echo "[4/13] Running yolov8s detection test..."
+./build/tests/TestExecutable -i 2.jpg -a yolov8 -m models/yolov8s.json
+
+# 5. yolov8_pose test
+echo "[5/13] Running yolov8_pose test..."
 ./build/tests/TestExecutable -i 2.jpg -a yolov8_pose -m models/yolov8s_pose.json
 
-# 5. yolov8_seg test
-echo "[5/8] Running yolov8_seg test..."
+# 6. yolov8_seg test
+echo "[6/13] Running yolov8_seg test..."
 ./build/tests/TestExecutable -i 2.jpg -a yolov8_seg -m models/yolov8s_seg.json
 
-# 6. TestModelLoading
-echo "[6/8] Running TestModelLoading..."
+# 7. TestModelLoading
+echo "[7/13] Running TestModelLoading..."
 ./build/tests/TestModelLoading
 
-# 7. TestSingleInference
-echo "[7/8] Running TestSingleInference..."
+# 8. TestSingleInference
+echo "[8/13] Running TestSingleInference..."
 ./build/tests/TestSingleInference
 
-# 8. TestThreadSafety
-echo "[8/8] Running TestThreadSafety..."
+# 9. TestThreadSafety
+echo "[9/13] Running TestThreadSafety..."
 ./build/tests/TestThreadSafety
 
-# 9. TestPipelineLpr
-echo "[9/9] Running TestPipelineLpr..."
+# 10. TestAsyncBackend
+echo "[10/13] Running TestAsyncBackend..."
+./build/tests/TestAsyncBackend
+
+# 11. TestFactoryMapping
+echo "[11/13] Running TestFactoryMapping..."
+./build/tests/TestFactoryMapping
+
+# 12. TestPipelineLpr
+echo "[12/13] Running TestPipelineLpr..."
 ./build/tests/TestPipelineLpr
+
+# 13. TestLprClassification
+echo "[13/13] Running TestLprClassification..."
+./build/tests/TestLprClassification
 
 echo "=== All validation passed! ==="
 exit 0

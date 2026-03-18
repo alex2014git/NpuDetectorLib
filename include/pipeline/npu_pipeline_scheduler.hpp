@@ -156,6 +156,9 @@ private:
         const FrameResults& frame,
         PipelineContext& ctx);
 
+    // Get non-batch input edges (filters out BATCH_ACCUMULATE edges)
+    std::vector<PipelineEdge> getNonBatchInputEdges(const NodeTask& task) const;
+
     // Member variables
     std::vector<NodeTask> _execution_order;
     std::unordered_map<std::string, size_t> _node_index;

@@ -1,0 +1,16 @@
+{
+    "name": "yolov5s",
+    "model_path": "models/yolov5s_11class.hef",
+    "classes": 11,
+    "feature_map_size": [20, 40, 80],
+    "anchors": [[116, 90, 156, 198, 373, 326], [30,  61, 62,  45,  59,  119], [10,  13, 16,  30,  33,  23]],
+    "labels": ["__background__", "person", "car", "bus", "truck", "chair", "laptop", "mouse", "keyboard", "cell phone", "book", "others", "etc"],
+    "size": [640, 640, 3],
+    "threshold": 0.5,
+    "yolo_nms_core": false,
+    "output_order_by_name": ["yolov5s_11class/conv60", "yolov5s_11class/conv54", "yolov5s_11class/conv47"],
+    "out_quantized": true,
+    "out_format": "HAILO_FORMAT_TYPE_UINT8",
+    "out_sigmoid": true
+}
+

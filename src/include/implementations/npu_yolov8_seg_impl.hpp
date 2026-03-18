@@ -20,9 +20,8 @@ public:
     void DrawResult(image_share_t imgData, bool needFormat) override;
 
 protected:
-    // PostProcess with needPreProcess for segmentation mask sizing
-    int PostProcess(image_share_t imgData) override { return PostProcess(imgData, _last_need_preprocess); }
-    int PostProcess(image_share_t imgData, bool needPreProcess);
+    // PostProcess override using _last_need_preprocess for segmentation mask sizing
+    int PostProcess(image_share_t imgData) override;
 
 private:
     std::vector<int32_t> _feature_map_sizes;

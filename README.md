@@ -146,12 +146,13 @@ Each algorithm type has a dedicated implementation class:
 
 | Algorithm | Class | Post-Processing |
 |-----------|-------|-----------------|
-| LPR | `NpuLprImpl` | CTC decoding |
-| Classification | `NpuClassificationImpl` | Argmax + top-k |
+| LPR | `NpuBaseAlgImpl` | None (raw outputs via GetRawOutputFloat) |
+| Classification | `NpuBaseAlgImpl` | None (raw outputs via GetRawOutputFloat) |
 | YOLOv5 | `NpuYoloImpl` | NMS + bbox extraction |
 | YOLOv8 | `NpuYolov8Impl` | NMS + bbox extraction |
 | YOLOv8 Pose | `NpuYolov8PoseImpl` | Keypoint detection |
 | YOLOv8 Seg | `NpuYolov8SegImpl` | Instance segmentation |
+| YOLO NMS | `NpuYoloNmsImpl` | Hardware NMS |
 | Base/Generic | `NpuBaseAlgImpl` | None (raw outputs) |
 
 ### Raw Output Access (ALG_BASE)

@@ -80,10 +80,10 @@ int NpuBaseImpl::InitConfig(std::string configJsonFile, int streamId) {
     if (_dom.HasMember("size") && _dom["size"].IsArray()) {
         const rapidjson::Value& arr = _dom["size"];
         if (arr[0].IsInt()) {
-            _model_height = arr[0].GetInt();
+            _model_width = arr[0].GetInt();
         }
         if (arr[1].IsInt()) {
-            _model_width = arr[1].GetInt();
+            _model_height = arr[1].GetInt();
         }
         if (arr[2].IsInt()) {
             _model_channel = static_cast<float>(arr[2].GetInt());

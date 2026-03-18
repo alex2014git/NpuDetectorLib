@@ -122,7 +122,7 @@ int NpuDetectionImpl::ParseHardwareNmsResults(image_share_t imgData) {
      * Hardware NMS output format:
      * Data is sorted by class. For each class:
      * - First element: number of boxes in this class
-     * - Following elements: boxes (x_min, y_min, x_max, y_max, score) each
+     * - Following elements: boxes (y_min, x_min, y_max, x_max, score) each
      * Each box is sizeof(common::hailo_bbox_t) = 5 * uint16_t or float32
      */
 
@@ -132,10 +132,10 @@ int NpuDetectionImpl::ParseHardwareNmsResults(image_share_t imgData) {
             for (int j = 0; j < obj_num; j++) {
                 if (i + 5 >= _output_buffer_float[0].size()) break;
 
-                float x_min = _output_buffer_float[0][i + 1];
-                float y_min = _output_buffer_float[0][i + 2];
-                float x_max = _output_buffer_float[0][i + 3];
-                float y_max = _output_buffer_float[0][i + 4];
+                float y_min = _output_buffer_float[0][i + 1];
+                float x_min = _output_buffer_float[0][i + 2];
+                float y_max = _output_buffer_float[0][i + 3];
+                float x_max = _output_buffer_float[0][i + 4];
                 float score = _output_buffer_float[0][i + 5];
 
                 if (score >= _conf_threshold) {

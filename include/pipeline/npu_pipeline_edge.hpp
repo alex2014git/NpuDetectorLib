@@ -49,6 +49,8 @@ struct PipelineEdge {
         int min_crop_height = 0;                   // Minimum crop height
         int max_crop_width = 0;                    // Maximum crop width (0 = no limit)
         int max_crop_height = 0;                   // Maximum crop height (0 = no limit)
+        int target_width = 0;                      // Target resize width after crop (0 = no resize)
+        int target_height = 0;                     // Target resize height after crop (0 = no resize)
     } params;
 
     // Custom transform function (for CUSTOM type)
@@ -102,11 +104,14 @@ namespace Edge {
 
     // Crop ROI from source frame
     inline PipelineEdge cropRoi(const std::string& from, const std::string& to,
-                                 int target_class = -1) {
+                                 int target_class = -1,
+                                 int target_width = 0, int target_height = 0) {
         PipelineEdge edge(from, to, PipelineEdge::CROP_ROI);
         if (target_class >= 0) {
             edge.params.target_classes = {target_class};
         }
+        edge.params.target_width = target_width;
+        edge.params.target_height = target_height;
         return edge;
     }
 
