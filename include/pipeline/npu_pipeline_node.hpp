@@ -155,6 +155,10 @@ protected:
         const PipelineObject& input,
         const FrameResults& frame);
 
+    // Extract NPU results and set on pipeline output object
+    // Handles all result types (LprResult, ClassificationResult, DetectionResult)
+    void extractAndSetResults(PipelineObject& output, const npu::NpuResult& result);
+
 private:
     std::string _name;
     std::string _type = "npu_inference";

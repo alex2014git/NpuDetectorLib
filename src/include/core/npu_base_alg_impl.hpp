@@ -2,6 +2,7 @@
 #define _NPU_BASE_ALG_IMPL_H
 
 #include "core/npu_base_impl.hpp"
+#include "pipeline/result_decoder.hpp"
 #include <vector>
 #include <string>
 
@@ -21,7 +22,7 @@ public:
 
     // Two-phase API - no post-processing for ALG_BASE (raw outputs only)
     int PostProcess(image_share_t imgData) override;  // No-op for ALG_BASE
-    std::vector<npu::NpuResult> GetResults() const override;  // Returns empty
+    std::vector<npu::NpuResult> GetResults() override;  // Uses decoder for LPR/Classification
     void ClearResults() override;  // No-op
 
     // Legacy API - implemented as Infer() + (no-op PostProcess)
@@ -39,6 +40,9 @@ public:
     const std::vector<hailo_vstream_info_t>& GetVstreamInfo() const { return _vstream_infos; }
 
 protected:
+    // Decoder for algorithm-specific result decoding (LPR, Classification)
+    std::unique_ptr<npu::ResultDecoder> _decoder;
+
     // For storing simple detection results if needed
     std::vector<object_roi_t> _results;
 };

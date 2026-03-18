@@ -2,76 +2,12 @@
 #include "pipeline/npu_pipeline_context.hpp"
 #include "npu.hpp"
 #include "npu_factory.hpp"
-#include "core/npu_base_alg_impl.hpp"
-#include "core/npu_detection_impl.hpp"
+#include "common/debug_logger.hpp"
 #include <opencv2/opencv.hpp>
 #include <algorithm>
 #include <cmath>
 
 namespace npu_pipeline {
-
-// LPR charset for decoding (same as yolo_lpr_async reference)
-static const char* g_lpr_charset[] = {
-    "#","京","沪","津","渝","冀","晋","蒙","辽","吉","黑","苏","浙","皖","闽","赣","鲁","豫","鄂","湘","粤","桂","琼","川",
-    "贵","云","藏","陕","甘","青","宁","新","学","警","港","澳","挂","使","领","民","航","危",
-    "0","1","2","3","4","5","6","7","8","9",
-    "A","B","C","D","E","F","G","H","J","K","L","M","N","P","Q","R","S","T","U","V","W","X","Y","Z","险","品","I","O","-"
-};
-static constexpr size_t g_lpr_charset_size = sizeof(g_lpr_charset) / sizeof(g_lpr_charset[0]);
-
-// Decode LPR output using CTC-style decoding (skip duplicates and blanks)
-static std::string decode_lpr_output(const float* output, int output_size) {
-    std::string plate;
-    std::string prev = "#";
-
-    for (int i = 0; i < output_size; ++i) {
-        if (std::isnan(output[i]) || std::isinf(output[i])) {
-            continue;
-        }
-        int idx = static_cast<int>(std::round(output[i]));
-        if (idx < 0 || idx >= static_cast<int>(g_lpr_charset_size)) {
-            continue;
-        }
-        const std::string& c = g_lpr_charset[idx];
-        if (c != "#" && c != prev) {
-            plate += c;
-        }
-        prev = c;
-    }
-
-    return plate;
-}
-
-// Decode classification output (argmax + top-k)
-static ClassificationResult decode_classification_output(const float* output, int output_size, const std::vector<std::string>& labels) {
-    ClassificationResult result;
-
-    // Find argmax
-    auto max_it = std::max_element(output, output + output_size);
-    int max_idx = std::distance(output, max_it);
-
-    result.class_id = max_idx;
-    result.confidence = *max_it;
-    if (max_idx >= 0 && max_idx < static_cast<int>(labels.size())) {
-        result.label = labels[max_idx];
-    } else {
-        result.label = "class_" + std::to_string(max_idx);
-    }
-
-    // Build top-5
-    std::vector<std::pair<float, int>> scored;
-    scored.reserve(output_size);
-    for (int i = 0; i < output_size; ++i) {
-        scored.push_back({output[i], i});
-    }
-    std::partial_sort(scored.begin(), scored.begin() + std::min(5, output_size), scored.end(), std::greater<>());
-
-    for (int i = 0; i < std::min(5, output_size); ++i) {
-        result.top_k.push_back({scored[i].second, scored[i].first});
-    }
-
-    return result;
-}
 
 // Check if node is ready to execute
 bool PipelineNode::isReady(const FrameResults& frame) const {
@@ -109,6 +45,46 @@ void NpuInferenceNode::release() {
         _npu->Release();
         _npu.reset();
     }
+}
+
+// Extract NPU results and set on pipeline output object
+void NpuInferenceNode::extractAndSetResults(PipelineObject& output, const npu::NpuResult& result) {
+    std::visit([&](auto&& arg) {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, npu::LprResult>) {
+            // Convert npu::LprResult to npu_pipeline::LprResult
+            LprResult pipeline_result;
+            pipeline_result.text = arg.text;
+            pipeline_result.confidence = arg.confidence;
+            pipeline_result.char_confidences = arg.char_confidences;
+            output.setResult(_name, pipeline_result);
+        } else if constexpr (std::is_same_v<T, npu::ClassificationResult>) {
+            // Convert npu::ClassificationResult to npu_pipeline::ClassificationResult
+            ClassificationResult pipeline_result;
+            pipeline_result.class_id = arg.class_id;
+            pipeline_result.label = arg.label;
+            pipeline_result.confidence = arg.confidence;
+            // Convert top_k
+            for (const auto& [id, conf] : arg.top_k) {
+                pipeline_result.top_k.push_back({id, conf});
+            }
+            output.setResult(_name, pipeline_result);
+        } else if constexpr (std::is_same_v<T, npu::DetectionResult>) {
+            // Convert npu::DetectionResult to npu_pipeline::DetectionResult
+            DetectionResult pipeline_result;
+            pipeline_result.class_id = arg.class_id;
+            pipeline_result.confidence = arg.confidence;
+            pipeline_result.bbox.y_min = arg.bbox.y_min;
+            pipeline_result.bbox.x_min = arg.bbox.x_min;
+            pipeline_result.bbox.y_max = arg.bbox.y_max;
+            pipeline_result.bbox.x_max = arg.bbox.x_max;
+            pipeline_result.bbox.confidence = arg.confidence;
+            pipeline_result.bbox.class_id = arg.class_id;
+            pipeline_result.bbox.class_name = arg.class_name;
+            output.setResult(_name, pipeline_result);
+        }
+        // Other types (PoseResult, SegmentationResult) can be added as needed
+    }, result);
 }
 
 // Single object processing - runs inference and extracts results
@@ -171,10 +147,8 @@ PipelineObject NpuInferenceNode::processObject(const PipelineObject& input,
 
     // Run inference
     // Skip preprocessing if image already matches model input size (avoid letterbox padding)
-    // Note: For LPR and classification models, always apply preprocessing to ensure
-    // proper color conversion (BGR to RGB) and normalization, even if dimensions match.
     bool needPreProcess = true;
-    if (_npu && _algorithm_type != ALG_LPR && _algorithm_type != ALG_CLASSIFICATION) {
+    if (_npu) {
         int model_width = _npu->GetModelWidth();
         int model_height = _npu->GetModelHeight();
         if (img_data.width == model_width && img_data.height == model_height) {
@@ -182,85 +156,19 @@ PipelineObject NpuInferenceNode::processObject(const PipelineObject& input,
         }
     }
 
-    // Debug output for LPR
-    if (_algorithm_type == ALG_LPR) {
-        int model_width = _npu->GetModelWidth();
-        int model_height = _npu->GetModelHeight();
-        std::cout << "[LPR DEBUG] Image: " << img_data.width << "x" << img_data.height
-                  << "x" << img_data.ch << ", Model: " << model_width << "x" << model_height
-                  << ", needPreProcess=" << needPreProcess << std::endl;
-    }
-
     int ret = _npu->Detect(img_data, needPreProcess);
     if (ret < 0) {
         return output;
     }
 
-    // Extract results based on algorithm type
-    switch (_algorithm_type) {
-        case ALG_LPR: {
-            auto* alg_impl = dynamic_cast<NpuBaseAlgImpl*>(_npu.get());
-            if (alg_impl && !alg_impl->GetRawOutputFloat().empty()) {
-                const auto& output_buffer = alg_impl->GetRawOutputFloat()[0];
-                LprResult lpr_result;
-                lpr_result.text = decode_lpr_output(output_buffer.data(), static_cast<int>(output_buffer.size()));
-                lpr_result.confidence = 1.0f;
-                output.setResult(_name, lpr_result);
-            }
-            break;
-        }
-        case ALG_CLASSIFICATION: {
-            auto* alg_impl = dynamic_cast<NpuBaseAlgImpl*>(_npu.get());
-            if (alg_impl && !alg_impl->GetRawOutputFloat().empty()) {
-                const auto& output_buffer = alg_impl->GetRawOutputFloat()[0];
-                ClassificationResult cls_result = decode_classification_output(
-                    output_buffer.data(), static_cast<int>(output_buffer.size()), {});
-                output.setResult(_name, cls_result);
-            }
-            break;
-        }
-        case ALG_YOLO_V5:
-        case ALG_YOLO_V8:
-        case ALG_YOLO_NMS:
-        case ALG_POSE:
-        case ALG_YOLO_V8_SEG:
-        default: {
-            // Detection models - extract results from NPU's internal storage
-            auto* det_impl = dynamic_cast<NpuDetectionImpl*>(_npu.get());
-            if (det_impl) {
-                const auto& detections = det_impl->GetDetectionResults();
-                if (!detections.empty()) {
-                    // Create DetectionResult for each detected object
-                    for (const auto& obj : detections) {
-                        DetectionResult det_result;
-                        det_result.class_id = obj.category;
-                        det_result.confidence = obj.confidence;
-                        det_result.bbox.x_min = obj.x_min;
-                        det_result.bbox.y_min = obj.y_min;
-                        det_result.bbox.x_max = obj.x_max;
-                        det_result.bbox.y_max = obj.y_max;
-                        output.setResult(_name, det_result);
-                    }
-                } else {
-                    // No detections
-                    DetectionResult det_result;
-                    det_result.class_id = -1;
-                    det_result.confidence = 0.0f;
-                    output.setResult(_name, det_result);
-                }
-                // Clear the detection results for next inference
-                det_impl->ClearDetectionResults();
-            } else {
-                // Fallback: create result from ROI info
-                DetectionResult det_result;
-                det_result.class_id = output.roi.class_id;
-                det_result.confidence = output.roi.confidence;
-                det_result.bbox = output.roi;
-                output.setResult(_name, det_result);
-            }
-            break;
-        }
+    // Extract results using unified GetResults() API
+    auto results = _npu->GetResults();
+    for (const auto& result : results) {
+        extractAndSetResults(output, result);
     }
+
+    // Clear results for next inference
+    _npu->ClearResults();
 
     return output;
 }
@@ -292,15 +200,14 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
     for (size_t i = 0; i < inputs.size(); ++i) {
         cv::Mat original;
 
-        // First check if we have a cropped image from a previous transform (e.g., crop ROI edge)
-        std::cout << "[DEBUG] Input[" << i << "]: cropped_image=" << (inputs[i].cropped_image ? "yes" : "no")
+        NPU_DEBUG("Input[" << i << "]: cropped_image=" << (inputs[i].cropped_image ? "yes" : "no")
                   << ", roi=" << inputs[i].roi.x_min << "," << inputs[i].roi.y_min
-                  << "-" << inputs[i].roi.x_max << "," << inputs[i].roi.y_max << std::endl;
+                  << "-" << inputs[i].roi.x_max << "," << inputs[i].roi.y_max);
 
         if (inputs[i].cropped_image) {
             inputs_with_cropped[i] = true;
             image_share_t* img = inputs[i].cropped_image.get();
-            std::cout << "[DEBUG] Using cropped image: " << img->width << "x" << img->height << std::endl;
+            NPU_DEBUG("Using cropped image: " << img->width << "x" << img->height);
             original = cv::Mat(img->height, img->width, CV_8UC(img->ch), img->data);
 
             // Create image_share_t for inference directly from cropped image
@@ -312,10 +219,8 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
 
             // Run inference (rest of the logic)
             // Skip preprocessing if image already matches model input size (avoid letterbox padding)
-            // Note: For LPR and classification models, always apply preprocessing to ensure
-            // proper color conversion (BGR to RGB) and normalization, even if dimensions match.
             bool needPreProcess = true;
-            if (_npu && _algorithm_type != ALG_LPR && _algorithm_type != ALG_CLASSIFICATION) {
+            if (_npu) {
                 int model_width = _npu->GetModelWidth();
                 int model_height = _npu->GetModelHeight();
                 if (img_data.width == model_width && img_data.height == model_height) {
@@ -323,85 +228,16 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
                 }
             }
 
-            // Debug output for LPR
-            if (_algorithm_type == ALG_LPR) {
-                int model_width = _npu->GetModelWidth();
-                int model_height = _npu->GetModelHeight();
-                std::cout << "[LPR DEBUG] Batch cropped: Image: " << img_data.width << "x" << img_data.height
-                          << "x" << img_data.ch << ", Model: " << model_width << "x" << model_height
-                          << ", needPreProcess=" << needPreProcess << std::endl;
-            }
-
             PipelineObject out = inputs[i];
             int ret = _npu->Detect(img_data, needPreProcess);
             if (ret >= 0) {
-                switch (_algorithm_type) {
-                    case ALG_LPR: {
-                        auto* alg_impl = dynamic_cast<NpuBaseAlgImpl*>(_npu.get());
-                        if (alg_impl && !alg_impl->GetRawOutputFloat().empty()) {
-                            const auto& output_buffer = alg_impl->GetRawOutputFloat()[0];
-                            LprResult lpr_result;
-                            lpr_result.text = decode_lpr_output(output_buffer.data(), static_cast<int>(output_buffer.size()));
-                            lpr_result.confidence = 1.0f;
-                            out.setResult(_name, lpr_result);
-                        }
-                        break;
-                    }
-                    case ALG_CLASSIFICATION: {
-                        auto* alg_impl = dynamic_cast<NpuBaseAlgImpl*>(_npu.get());
-                        if (alg_impl && !alg_impl->GetRawOutputFloat().empty()) {
-                            const auto& output_buffer = alg_impl->GetRawOutputFloat()[0];
-                            ClassificationResult cls_result = decode_classification_output(
-                                output_buffer.data(), static_cast<int>(output_buffer.size()), {});
-                            out.setResult(_name, cls_result);
-                        }
-                        break;
-                    }
-                    case ALG_YOLO_V5:
-                    case ALG_YOLO_V8:
-                    case ALG_YOLO_NMS:
-                    case ALG_POSE:
-                    case ALG_YOLO_V8_SEG: {
-                        // Detection models - extract results from NPU's internal storage
-                        auto* det_impl = dynamic_cast<NpuDetectionImpl*>(_npu.get());
-                        if (det_impl) {
-                            const auto& detections = det_impl->GetDetectionResults();
-                            if (!detections.empty()) {
-                                // Create one PipelineObject per detection
-                                for (const auto& obj : detections) {
-                                    PipelineObject det_out = out;
-                                    DetectionResult det_result;
-                                    det_result.class_id = obj.category;
-                                    det_result.confidence = obj.confidence;
-                                    det_result.bbox.x_min = obj.x_min;
-                                    det_result.bbox.y_min = obj.y_min;
-                                    det_result.bbox.x_max = obj.x_max;
-                                    det_result.bbox.y_max = obj.y_max;
-                                    det_result.bbox.class_id = obj.category;
-                                    det_result.bbox.confidence = obj.confidence;
-                                    det_out.roi = det_result.bbox;
-                                    det_out.setResult(_name, det_result);
-                                    outputs.push_back(std::move(det_out));
-                                }
-                            } else {
-                                // No detections - create empty result
-                                DetectionResult det_result;
-                                det_result.class_id = -1;
-                                det_result.confidence = 0.0f;
-                                out.setResult(_name, det_result);
-                                outputs.push_back(std::move(out));
-                            }
-                            det_impl->ClearDetectionResults();
-                        } else {
-                            outputs.push_back(std::move(out));
-                        }
-                        break;
-                    }
-                    default:
-                        outputs.push_back(std::move(out));
-                        break;
+                // Extract results using unified GetResults() API
+                auto results = _npu->GetResults();
+                for (const auto& result : results) {
+                    extractAndSetResults(out, result);
                 }
             }
+            _npu->ClearResults();
             outputs.push_back(std::move(out));
             continue;  // Skip the normal processing below
         }
@@ -463,10 +299,8 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
 
         // Run inference
         // Skip preprocessing if image already matches model input size (avoid letterbox padding)
-        // Note: For LPR and classification models, always apply preprocessing to ensure
-        // proper color conversion (BGR to RGB) and normalization, even if dimensions match.
         bool needPreProcess = true;
-        if (_npu && _algorithm_type != ALG_LPR && _algorithm_type != ALG_CLASSIFICATION) {
+        if (_npu) {
             int model_width = _npu->GetModelWidth();
             int model_height = _npu->GetModelHeight();
             if (img_data.width == model_width && img_data.height == model_height) {
@@ -474,94 +308,40 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
             }
         }
 
-        // Debug output for LPR
-        if (_algorithm_type == ALG_LPR) {
-            int model_width = _npu->GetModelWidth();
-            int model_height = _npu->GetModelHeight();
-            std::cout << "[LPR DEBUG] Batch: Image: " << img_data.width << "x" << img_data.height
-                      << "x" << img_data.ch << ", Model: " << model_width << "x" << model_height
-                      << ", needPreProcess=" << needPreProcess << std::endl;
-        }
-
         int ret = _npu->Detect(img_data, needPreProcess);
         if (ret >= 0) {
-            // Get algorithm-specific results
-            switch (_algorithm_type) {
-                case ALG_LPR: {
-                    // Get raw output from NpuBaseAlgImpl
-                    auto* alg_impl = dynamic_cast<NpuBaseAlgImpl*>(_npu.get());
-                    if (alg_impl && !alg_impl->GetRawOutputFloat().empty()) {
-                        const auto& output_buffer = alg_impl->GetRawOutputFloat()[0];
-                        LprResult lpr_result;
-                        lpr_result.text = decode_lpr_output(output_buffer.data(), static_cast<int>(output_buffer.size()));
-                        lpr_result.confidence = 1.0f; // Could calculate from output if needed
-                        out.setResult(_name, lpr_result);
-                    }
-                    break;
-                }
-                case ALG_CLASSIFICATION: {
-                    // Get raw output from NpuBaseAlgImpl
-                    auto* alg_impl = dynamic_cast<NpuBaseAlgImpl*>(_npu.get());
-                    if (alg_impl && !alg_impl->GetRawOutputFloat().empty()) {
-                        const auto& output_buffer = alg_impl->GetRawOutputFloat()[0];
-                        // Get labels from the NPU implementation if available
-                        ClassificationResult cls_result = decode_classification_output(
-                            output_buffer.data(), static_cast<int>(output_buffer.size()), {});
-                        out.setResult(_name, cls_result);
-                    }
-                    break;
-                }
-                case ALG_YOLO_V5:
-                case ALG_YOLO_V8:
-                case ALG_YOLO_NMS:
-                case ALG_POSE:
-                case ALG_YOLO_V8_SEG:
-                default: {
-                    // Detection models - extract results from NPU's internal storage
-                    // The NPU has already stored detection results in _objects vector
-                    auto* det_impl = dynamic_cast<NpuDetectionImpl*>(_npu.get());
-                    if (det_impl) {
-                        const auto& detections = det_impl->GetDetectionResults();
-                        if (!detections.empty()) {
-                            // Create one PipelineObject per detection
-                            for (const auto& obj : detections) {
-                                PipelineObject det_out = out;
-                                DetectionResult det_result;
-                                det_result.class_id = obj.category;
-                                det_result.confidence = obj.confidence;
-                                // Copy bbox from object_roi_t to ObjectRoi
-                                det_result.bbox.x_min = obj.x_min;
-                                det_result.bbox.y_min = obj.y_min;
-                                det_result.bbox.x_max = obj.x_max;
-                                det_result.bbox.y_max = obj.y_max;
-                                det_result.bbox.class_id = obj.category;
-                                det_result.bbox.confidence = obj.confidence;
-                                det_out.roi = det_result.bbox;  // Set the ROI for downstream processing
-                                det_out.setResult(_name, det_result);
-                                outputs.push_back(std::move(det_out));
-                            }
-                        } else {
-                            // No detections - still create a result indicating this
-                            DetectionResult det_result;
-                            det_result.class_id = -1;
-                            det_result.confidence = 0.0f;
-                            out.setResult(_name, det_result);
-                            outputs.push_back(std::move(out));
-                        }
-                        // Clear the detection results for next inference
-                        det_impl->ClearDetectionResults();
-                        continue;  // Skip the outputs.push_back at the end since we already added objects
-                    } else {
-                        // Fallback: create result from ROI info
-                        DetectionResult det_result;
-                        det_result.class_id = out.roi.class_id;
-                        det_result.confidence = out.roi.confidence;
-                        det_result.bbox = out.roi;
-                        out.setResult(_name, det_result);
-                    }
-                    break;
+            // Extract results using unified GetResults() API
+            auto results = _npu->GetResults();
+            for (const auto& result : results) {
+                // Handle detection results specially - create new PipelineObject per detection
+                bool is_detection = std::visit([](auto&& arg) -> bool {
+                    using T = std::decay_t<decltype(arg)>;
+                    return std::is_same_v<T, npu::DetectionResult>;
+                }, result);
+
+                if (is_detection) {
+                    // For detection models, create one PipelineObject per detection
+                    const auto& det_result = std::get<npu::DetectionResult>(result);
+                    PipelineObject det_out = out;
+                    DetectionResult pipeline_result;
+                    pipeline_result.class_id = det_result.class_id;
+                    pipeline_result.confidence = det_result.confidence;
+                    pipeline_result.bbox.y_min = det_result.bbox.y_min;
+                    pipeline_result.bbox.x_min = det_result.bbox.x_min;
+                    pipeline_result.bbox.y_max = det_result.bbox.y_max;
+                    pipeline_result.bbox.x_max = det_result.bbox.x_max;
+                    pipeline_result.bbox.class_id = det_result.class_id;
+                    pipeline_result.bbox.confidence = det_result.confidence;
+                    det_out.roi = pipeline_result.bbox;
+                    det_out.setResult(_name, pipeline_result);
+                    outputs.push_back(std::move(det_out));
+                } else {
+                    extractAndSetResults(out, result);
                 }
             }
+            // Clear the detection results for next inference
+            _npu->ClearResults();
+            continue;  // Skip the outputs.push_back at the end since we already added objects
         }
 
         outputs.push_back(std::move(out));

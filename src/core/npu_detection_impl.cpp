@@ -11,7 +11,7 @@ NpuDetectionImpl::~NpuDetectionImpl() {
 }
 
 // Get unified results (converts _objects to NpuResult)
-std::vector<npu::NpuResult> NpuDetectionImpl::GetResults() const {
+std::vector<npu::NpuResult> NpuDetectionImpl::GetResults() {
     std::vector<npu::NpuResult> results;
     results.reserve(_objects.size());
 

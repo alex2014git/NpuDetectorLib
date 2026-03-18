@@ -39,7 +39,20 @@ if (UNIX)
     install(DIRECTORY include/ DESTINATION include)
     install(FILES ${PROJECT_SOURCE_DIR}/common.cmake DESTINATION share/NpuLibrary)
 endif()
-if (BUILD_TESTER)
+# Test configuration
+option(BUILD_TESTER "Build tests (legacy, enables all test categories)" OFF)
+option(BUILD_UNIT_TESTS "Build unit tests (requires NpuLibrary)" OFF)
+option(BUILD_INTEGRATION_TESTS "Build integration tests (requires NpuLibrary)" OFF)
+option(BUILD_HARDWARE_TESTS "Build hardware tests (requires Hailo NPU)" OFF)
+option(BUILD_VALIDATION_TESTS "Build validation tests (requires Hailo NPU)" OFF)
+
+# Determine if any tests should be built
+set(BUILD_ANY_TESTS OFF)
+if(BUILD_TESTER OR BUILD_UNIT_TESTS OR BUILD_INTEGRATION_TESTS OR BUILD_HARDWARE_TESTS OR BUILD_VALIDATION_TESTS)
+    set(BUILD_ANY_TESTS ON)
+endif()
+
+if(BUILD_ANY_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()

@@ -20,8 +20,8 @@
 #include "hailo/hailort.hpp"
 #include "npu_handler.hpp"
 
-// Import types from MultiNetworkPipeline for compatibility
-#include "MultiNetworkPipeline/MultiNetworkPipeline.hpp"
+// Import types from npu_types (extracted from MultiNetworkPipeline)
+#include "core/npu_types.hpp"
 
 /**
  * AsyncBackend is a Singleton class that wraps NPUHandler to provide

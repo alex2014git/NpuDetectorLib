@@ -71,7 +71,7 @@ public:
 
     /// @brief Get parsed results from the last inference
     /// @return Vector of results (use std::visit to access specific types)
-    virtual std::vector<npu::NpuResult> GetResults() const = 0;
+    virtual std::vector<npu::NpuResult> GetResults() = 0;
 
     /// @brief Clear results for next inference
     virtual void ClearResults() = 0;

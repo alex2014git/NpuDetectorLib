@@ -43,6 +43,9 @@ Commits are blocked if build or test fails.
 - `SHOW_LABEL`: Enable labels display (default: OFF)
 - `TIME_TRACE_DEBUG`: Enable debug/timing output (default: OFF)
 - `BUILD_TESTER`: Build test executable (default: OFF)
+- `BUILD_UNIT_TESTS`: Build unit tests with mocks (default: OFF)
+- `BUILD_INTEGRATION_TESTS`: Build integration tests (default: OFF)
+- `BUILD_HARDWARE_TESTS`: Build hardware-dependent tests (default: ON)
 
 ## Multi-Model Pipeline Architecture
 
@@ -144,7 +147,7 @@ FrameResults with all stage_results
 
 ## Architecture Overview
 
-This is a C++17 library for Hailo NPU inference, supporting YOLO object detection models.
+This is a C++17 library for Hailo NPU inference, supporting YOLO object detection, LPR, and classification models.
 
 ### Core Components
 
@@ -152,15 +155,21 @@ This is a C++17 library for Hailo NPU inference, supporting YOLO object detectio
 - Abstract base class defining the NPU API
 - Algorithm types: `ALG_BASE`, `ALG_YOLO_V5`, `ALG_YOLO_V8`, `ALG_POSE`, `ALG_YOLO_V8_SEG`, `ALG_LPR`, `ALG_CLASSIFICATION`
 
-**Implementation Classes** (`src/include/*.hpp`, `src/*.cpp`)
+**Implementation Classes** (`src/include/core/*.hpp`, `src/core/*.cpp`)
 - `NpuBaseImpl`: Base implementation with common functionality (preprocessing, NPU init, result drawing)
 - `NpuYoloImpl`: YOLO-specific post-processing
-- `NpuYolo8Impl`, `NpuYolo8PoseImpl`, `NpuYolo8SegImpl`: YOLOv8 variant implementations
+- `NpuYolov8Impl`, `NpuYolov8PoseImpl`, `NpuYolov8SegImpl`: YOLOv8 variant implementations
+- `NpuYoloNmsImpl`: Hardware NMS implementation
 
-**MultiNetworkPipeline** (`src/include/MultiNetworkPipeline/`)
-- Singleton pattern for managing multiple networks on Hailo NPU
-- Thread-safe pipeline switching between different HEF models
-- Key API: `GetInstance()` → `InitializeHailo()` → `AddNetwork()` → `Infer()` → `ReadOutputById()`
+**Backend Abstraction** (`src/include/core/npu_backend.hpp`, `src/include/backend/async_npu_backend.hpp`)
+- `NpuBackend`: Interface for NPU operations (dependency injection)
+- `AsyncNpuBackend`: Adapter wrapping the legacy AsyncBackend singleton
+- Enables unit testing with mock backends, future backend implementations
+
+**Result Decoding** (`src/include/pipeline/result_decoder.hpp`)
+- `ResultDecoder`: Interface for algorithm-specific result decoding
+- `LprDecoder`: CTC decoding for license plate recognition
+- `ClassificationDecoder`: Argmax/top-k for classification models
 
 **Post-processing** (`src/yolov8/`)
 - `nms.cpp`: Non-maximum suppression
@@ -172,6 +181,9 @@ This is a C++17 library for Hailo NPU inference, supporting YOLO object detectio
 - OpenCV (image preprocessing/display)
 - xtensor/xtl (numerical operations)
 - rapidjson (model config parsing)
+
+### Architecture Documentation
+- See [ARCHITECTURE.md](ARCHITECTURE.md) for comprehensive architecture documentation
 
 ## Pipeline API Reference
 
@@ -491,50 +503,83 @@ Checklist for validating pipeline code:
 | Nodes | `include/pipeline/npu_pipeline_node.hpp` | `src/pipeline/npu_pipeline_node.cpp` |
 | Edges | `include/pipeline/npu_pipeline_edge.hpp` | `src/pipeline/npu_pipeline_edge.cpp` |
 | Tracking | - | `src/pipeline/tracking_node.cpp` |
+| **Backend Interface** | `src/include/core/npu_backend.hpp` | - |
+| **Async Adapter** | `src/include/backend/async_npu_backend.hpp` | `src/backend/async_npu_backend.cpp` |
+| **Result Decoder** | `src/include/pipeline/result_decoder.hpp` | `src/pipeline/result_decoder.cpp` |
+| **Transform Engine** | `src/include/pipeline/transform_engine.hpp` | `src/pipeline/npu_pipeline_scheduler.cpp` |
+| **Batch Accumulator** | `src/include/pipeline/batch_accumulator.hpp` | `src/pipeline/npu_pipeline_scheduler.cpp` |
+| **Debug Logger** | `src/include/common/debug_logger.hpp` | - |
+| **Scope Guard** | `src/include/common/scope_guard.hpp` | - |
+
+### New Architecture Key Files
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Backend Interface | `src/include/core/npu_backend.hpp` | NpuBackend abstraction interface for dependency injection |
+| Backend Types | `src/include/core/npu_types.hpp` | Shared types (MnpReturnCode, NetworkConfig, qp_zp_scale_t) |
+| Async Adapter | `src/include/backend/async_npu_backend.hpp` | AsyncBackend adapter implementing NpuBackend interface |
+| Result Decoder | `src/include/pipeline/result_decoder.hpp` | Algorithm-specific result decoding (LPR CTC, Classification argmax) |
+| Transform Engine | `src/include/pipeline/transform_engine.hpp` | Edge transform application engine |
+| Batch Accumulator | `src/include/pipeline/batch_accumulator.hpp` | Batch accumulation for batched scheduler |
+| Debug Logger | `src/include/common/debug_logger.hpp` | Conditional NPU_DEBUG logging macros |
+| Scope Guard | `src/include/common/scope_guard.hpp` | RAII cleanup utilities |
 
 ## Architecture Deep Dive
 
 ### Multi-threaded Inference Flow
 
 **Key Components:**
-1. **tests/main.cpp** - Test harness that spawn N threads
+1. **tests/hardware/main.cpp** - Test harness that spawn N threads
 2. **NpuBaseImpl** - Base class with preprocessing and NPU initialization
-3. **AsyncBackend** - Singleton wrapping HailoRT async API
-4. **NPUHandler** - Per-network Hailo model wrapper
-5. **Post-processing** - Model-specific output parsing (nms, pose, seg)
+3. **NpuBackend** - Backend abstraction interface (replaces AsyncBackend singleton access)
+4. **AsyncNpuBackend** - Adapter wrapping HailoRT async API
+5. **NPUHandler** - Per-network Hailo model wrapper (inside AsyncBackend)
+6. **Post-processing** - Model-specific output parsing (nms, pose, seg)
 
-**Thread Flow (Fixed Async Version):**
+**Thread Flow:**
 ```
 main() → process_image() (N threads)
    ↓
 NpuFactory::CreateNpu() → NpuYoloImpl / NpuYolo8Impl / etc.
    ↓
-Initialize() → InitNPU() → AsyncBackend::AddNetwork()
+Initialize() → backend_->Initialize() → backend_->AddNetwork()
    ↓
 Detect() → NpuProcessing<T>()
    ↓
-PreProcessing() → Infer() (async) → ReadOutputById() → PostProcessing()
+PreProcessing() → backend_->Infer() → backend_->ReadOutput() → PostProcessing()
 ```
 
-**AsyncBackend Double Buffering:**
+**Dependency Injection:**
+```cpp
+// Algorithm implementations receive backend via constructor
+auto backend = std::make_shared<AsyncNpuBackend>();
+auto npu = std::make_shared<NpuYoloImpl>(backend);
+
+// For testing, use mock backend
+auto mock_backend = std::make_shared<MockNpuBackend>();
+auto npu = std::make_shared<NpuYoloImpl>(mock_backend);
+```
+
+**AsyncNpuBackend Double Buffering:**
 - Each NetworkInstance has 2 sets of input/output buffers (ping-pong)
 - Infer() submits async request and returns immediately
 - Callback marks completion when NPU finishes
-- ReadOutputById() waits for completion then reads from completed buffer
-- Global mutex removed from hot path (Infer, ReadOutputById)
+- ReadOutput() waits for completion then reads from completed buffer
+- No global mutex on hot path (backend-level locking only)
 
 **Key Files Reference:**
 | Component | File | Purpose |
 |-----------|------|---------|
-| Test harness | `tests/main.cpp` | Multi-threaded test entry point |
+| Test harness | `tests/hardware/main.cpp` | Multi-threaded test entry point |
 | NPU Interface | `include/npu.hpp` | Abstract base class definition |
-| Base Implementation | `src/npu_base_impl.cpp` | Preprocessing, NPU init, common utilities |
-| YOLOv8 Detection | `src/npu_yolov8_impl.cpp` | YOLOv8 detection post-processing |
-| YOLOv8 Pose | `src/npu_yolov8_pose_impl.cpp` | Keypoint detection post-processing |
-| YOLOv8 Segmentation | `src/npu_yolov8_seg_impl.cpp` | Instance segmentation post-processing |
-| Pipeline Scheduler | `src/pipeline/npu_pipeline_scheduler.cpp` | Execution scheduling (Sequential/Parallel/Batched) |
-| Pipeline Node | `src/pipeline/npu_pipeline_node.cpp` | NPU inference node with result extraction |
-| Async Backend | `src/async_backend.cpp` | Thread-safe async inference wrapper |
+| Base Implementation | `src/core/npu_base_impl.cpp` | Preprocessing, NPU init, common utilities |
+| YOLOv8 Detection | `src/core/npu_yolov8_impl.cpp` | YOLOv8 detection post-processing |
+| YOLOv8 Pose | `src/core/npu_yolov8_pose_impl.cpp` | Keypoint detection post-processing |
+| YOLOv8 Segmentation | `src/core/npu_yolov8_seg_impl.cpp` | Instance segmentation post-processing |
+| Pipeline Scheduler | `src/pipeline/npu_pipeline_scheduler.cpp` | Execution scheduling (296 lines) |
+| Pipeline Node | `src/pipeline/npu_pipeline_node.cpp` | NPU inference node (190 lines) |
+| Backend Interface | `src/include/core/npu_backend.hpp` | Backend abstraction interface |
+| Async Adapter | `src/include/backend/async_npu_backend.hpp` | AsyncBackend adapter |
 | NPU Handler | `src/async_backend/npu_handler.cpp` | HailoRT model wrapper |
 | Post-process (YOLOv8) | `src/yolov8/yolov8_postprocess.cpp` | Detection NMS |
 | Post-process (Pose) | `src/yolov8/yolov8pose_postprocess.cpp` | Keypoint filtering |

@@ -9,8 +9,8 @@
 #include <memory>
 #include "hailo/hailort.hpp"
 #include "opencv2/opencv.hpp"
-#include "MultiNetworkPipeline/MultiNetworkPipeline.hpp"
-#include "async_backend.hpp"
+#include "core/npu_types.hpp"
+#include "core/npu_backend.hpp"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/prettywriter.h"
@@ -37,7 +37,7 @@ public:
     virtual int PostProcess(image_share_t imgData) = 0;
 
     // Get parsed results - subclasses must implement
-    virtual std::vector<npu::NpuResult> GetResults() const = 0;
+    virtual std::vector<npu::NpuResult> GetResults() = 0;
 
     // Clear results for next inference - subclasses must implement
     virtual void ClearResults() = 0;
@@ -56,6 +56,12 @@ public:
 
     /// @brief Get model input height
     int GetModelHeight() const override { return _model_height; }
+
+    // Backend injection for testing and mocking
+    // Allow factory to inject backend (used for testing with mocks)
+    void SetBackend(std::shared_ptr<NpuBackend> backend) { _backend = backend; }
+
+    std::shared_ptr<NpuBackend> GetBackend() const { return _backend; }
 
 protected:
     // Configuration and state
@@ -88,7 +94,7 @@ protected:
     std::vector<hailo_vstream_info_t> _vstream_infos;
 
     // Backend and JSON config
-    AsyncBackend* pAsyncBackend;
+    std::shared_ptr<NpuBackend> _backend;
     rapidjson::Document _dom;
     struct timeval _start_time, _stop_time;
 

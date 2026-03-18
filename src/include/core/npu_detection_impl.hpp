@@ -22,7 +22,7 @@ public:
     virtual int PostProcess(image_share_t imgData) = 0;
 
     // Get unified results (converts _objects to NpuResult)
-    std::vector<npu::NpuResult> GetResults() const override;
+    std::vector<npu::NpuResult> GetResults() override;
 
     // Clear results for next inference
     void ClearResults() override;

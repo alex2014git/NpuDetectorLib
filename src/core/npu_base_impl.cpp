@@ -121,13 +121,16 @@ int NpuBaseImpl::InitConfig(std::string configJsonFile, int streamId) {
 }
 
 int NpuBaseImpl::InitNPU() {
-    pAsyncBackend = &AsyncBackend::GetInstance();
-    if (!pAsyncBackend->Initialize()) {
+    if (!_backend) {
+        std::cerr << "-E- Backend not injected! Call SetBackend() before Initialize()." << std::endl;
+        return -1;
+    }
+    if (!_backend->Initialize()) {
         std::cerr << "-W- Hailo device/module not found!" << std::endl;
         return -1;
     }
 
-    AsyncBackend::NetworkConfig Network;
+    NetworkConfig Network;
     Network.hef_path = _model_path;
     Network.output_order_by_name = _output_order_by_name;
     Network.batch_size = _batch_size;
@@ -135,23 +138,23 @@ int NpuBaseImpl::InitNPU() {
     Network.out_quantized = ((_out_format == HAILO_FORMAT_TYPE_FLOAT32) ? false : true);
     Network.id_name = _idName + _stream_id;
 
-    if (pAsyncBackend->AddNetwork(Network) != MnpReturnCode::SUCCESS) {
+    if (_backend->AddNetwork(Network) != MnpReturnCode::SUCCESS) {
         std::cerr << "AddNetwork error on " << _stream_id << std::endl;
         return -1;
     }
 
-    pAsyncBackend->GetNetworkQuantizationInfo(Network.id_name, _quantization_info);
+    _backend->GetNetworkQuantizationInfo(Network.id_name, _quantization_info);
     for (const auto& info : _quantization_info) {
         _out_zps.push_back(info.qp_zp);
         _out_scales.push_back(info.qp_scale);
     }
-    pAsyncBackend->GetNetworkVstream_Info(Network.id_name, _vstream_infos);
-    pAsyncBackend->GetNetworkInputSize(Network.id_name, _network_input_size);
+    _backend->GetNetworkVstreamInfo(Network.id_name, _vstream_infos);
+    _backend->GetNetworkInputSize(Network.id_name, _network_input_size);
 
     if (_out_format == HAILO_FORMAT_TYPE_FLOAT32) {
-        pAsyncBackend->InitializeOutputBuffer(Network.id_name, _output_buffer_float);
+        _backend->InitializeOutputBuffer(Network.id_name, _output_buffer_float);
     } else {
-        pAsyncBackend->InitializeOutputBuffer(Network.id_name, _output_buffer_uint8);
+        _backend->InitializeOutputBuffer(Network.id_name, _output_buffer_uint8);
     }
 
     _initialized = true;
@@ -237,12 +240,12 @@ MnpReturnCode NpuBaseImpl::NpuPorcessing(image_share_t imgData, bool needPreProc
         inferData.assign(inferFrame.datastart, inferFrame.datastart + totalsz);
     }
 
-    pAsyncBackend->Infer(idName, inferData);
+    _backend->Infer(idName, inferData);
 
     if (_out_format == HAILO_FORMAT_TYPE_FLOAT32) {
-        ReadOutRet = pAsyncBackend->ReadOutputById(idName, _output_buffer_float);
+        ReadOutRet = _backend->ReadOutput(idName, _output_buffer_float);
     } else {
-        ReadOutRet = pAsyncBackend->ReadOutputById(idName, _output_buffer_uint8);
+        ReadOutRet = _backend->ReadOutput(idName, _output_buffer_uint8);
     }
 
     return ReadOutRet;
@@ -280,9 +283,9 @@ std::string NpuBaseImpl::GetVersion() {
 }
 
 void NpuBaseImpl::Release() {
-    if (_initialized && pAsyncBackend) {
+    if (_initialized && _backend) {
         std::string network_id = _idName + _stream_id;
-        pAsyncBackend->RemoveNetwork(network_id);
+        _backend->RemoveNetwork(network_id);
     }
     _initialized = false;
 }

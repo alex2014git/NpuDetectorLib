@@ -28,7 +28,9 @@ include_directories(
     ${HAILORT_INCLUDE}
     ${OpenCV_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/src/async_backend
+    ${PROJECT_SOURCE_DIR}/src/include/backend
     ${PROJECT_SOURCE_DIR}/include/pipeline
+    ${PROJECT_SOURCE_DIR}/src/include/common
 )
 
 # Add root-level sources (async_backend and factory)
@@ -42,12 +44,13 @@ set(ROOT_SOURCES
 add_library(NpuLibrary SHARED ${ROOT_SOURCES})
 
 # Add subdirectories after library is defined
+add_subdirectory(backend)
 add_subdirectory(core)
 add_subdirectory(common)
 add_subdirectory(implementations)
 add_subdirectory(algorithms)
 add_subdirectory(pipeline)
-add_subdirectory(MultiNetworkPipeline)
+# add_subdirectory(MultiNetworkPipeline)  # REMOVED - types extracted to npu_types.hpp
 
 # Link libraries
 target_link_libraries(NpuLibrary

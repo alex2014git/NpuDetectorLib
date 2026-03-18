@@ -12,8 +12,25 @@ int NpuBaseAlgImpl::Initialize(std::string configJsonFile, int streamId) {
         return result;
     }
 
-    // Base algorithm doesn't use NMS
-    // Subclasses can override if needed
+    // Parse algorithm identity from JSON "name" field and create appropriate decoder
+    // LPR config has: "name": "lpr"
+    // Classification config has: "name": "classification"
+    if (_idName == "lpr") {
+        // Parse character_set from JSON config
+        std::vector<std::string> charset;
+        if (_dom.HasMember("character_set") && _dom["character_set"].IsArray()) {
+            const auto& char_array = _dom["character_set"];
+            for (size_t i = 0; i < char_array.Size(); ++i) {
+                if (char_array[i].IsString()) {
+                    charset.push_back(char_array[i].GetString());
+                }
+            }
+        }
+        _decoder = std::make_unique<npu::LprDecoder>(charset);
+    } else if (_idName == "classification") {
+        _decoder = std::make_unique<npu::ClassificationDecoder>();
+    }
+
     return 0;
 }
 
@@ -36,11 +53,14 @@ int NpuBaseAlgImpl::PostProcess(image_share_t imgData) {
     return 0;
 }
 
-// Get results (empty for ALG_BASE - use GetRawOutputFloat/Uint8 instead)
-std::vector<npu::NpuResult> NpuBaseAlgImpl::GetResults() const {
-    // ALG_BASE doesn't produce parsed results - returns empty vector
-    // Users should access raw outputs via GetRawOutputFloat() or GetRawOutputUint8()
-    return {};
+// Get results - uses decoder for LPR/Classification models
+std::vector<npu::NpuResult> NpuBaseAlgImpl::GetResults() {
+    if (!_decoder) {
+        // No decoder configured - return empty (ALG_BASE behavior)
+        return {};
+    }
+    // Use decoder to convert raw outputs to structured results
+    return _decoder->decode(_output_buffer_float, _labels);
 }
 
 // Clear results (no-op for ALG_BASE)

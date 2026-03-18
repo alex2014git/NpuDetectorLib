@@ -1,5 +1,6 @@
 #include "pipeline/npu_pipeline_edge.hpp"
 #include "pipeline/npu_pipeline_context.hpp"
+#include "common/debug_logger.hpp"
 #include <algorithm>
 #include <numeric>
 #include <cstring>
@@ -190,8 +191,8 @@ std::vector<PipelineObject> cropRoi(
 
         // Perform the crop using OpenCV (clone() makes a deep copy)
         cv::Rect crop_rect(x, y, w, h);
-        std::cout << "[CROP DEBUG] Cropping ROI: x=" << x << " y=" << y << " w=" << w << " h=" << h
-                  << " from source " << src->width << "x" << src->height << std::endl;
+        NPU_DEBUG_PREFIX("CROP DEBUG", "Cropping ROI: x=" << x << " y=" << y << " w=" << w << " h=" << h
+                  << " from source " << src->width << "x" << src->height);
         cv::Mat cropped_mat = src_mat(crop_rect).clone();
 
         // Resize to target dimensions if specified (e.g., for LPR model input)
@@ -201,8 +202,8 @@ std::vector<PipelineObject> cropRoi(
                        cv::Size(params.target_width, params.target_height),
                        0, 0, cv::INTER_LINEAR);
             cropped_mat = std::move(resized_mat);
-            std::cout << "[CROP DEBUG] Resized crop from " << w << "x" << h
-                      << " to " << params.target_width << "x" << params.target_height << std::endl;
+            NPU_DEBUG_PREFIX("CROP DEBUG", "Resized crop from " << w << "x" << h
+                      << " to " << params.target_width << "x" << params.target_height);
         }
 
         // Create new image_share_t for the cropped image with custom deleter
@@ -222,7 +223,7 @@ std::vector<PipelineObject> cropRoi(
         // Copy pixel data from OpenCV Mat to our buffer
         memcpy(cropped->data, cropped_mat.data, cropped->width * cropped->height * src->ch);
 
-        std::cout << "[CROP DEBUG] Created cropped image: " << cropped->width << "x" << cropped->height << std::endl;
+        NPU_DEBUG_PREFIX("CROP DEBUG", "Created cropped image: " << cropped->width << "x" << cropped->height);
 
         // Store crop metadata for reference
         obj.metadata["crop_x"] = std::to_string(x);

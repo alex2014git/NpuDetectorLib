@@ -32,10 +32,13 @@ In the build step, you can also change some of the definitions in this library:
 - `SHOW_LABEL`: Enable show labels functionality. You can use this to decide if you want to show the detected result label or not.
 - `TIME_TRACE_DEBUG`: Enable debugging and time tracking functionality. Debugging settings will show the time tracking and the result details.
 - `BUILD_TESTER`: Enable build the tester
+- `BUILD_UNIT_TESTS`: Build unit tests using mock backend (no hardware required)
+- `BUILD_INTEGRATION_TESTS`: Build integration tests (may require hardware)
+- `BUILD_HARDWARE_TESTS`: Build hardware-dependent tests (requires Hailo NPU)
 
-You could try:  
+You could try:
 ```sh
-cmake -H. -Bbuild -DSHOW_LABEL=ON -DBUILD_TESTER=ON
+cmake -H. -Bbuild -DSHOW_LABEL=ON -DBUILD_TESTER=ON -DBUILD_HARDWARE_TESTS=ON
 ```
 
 **How to Use the Demo:**
@@ -73,13 +76,18 @@ Example for using the usb camera(only support one stream):
 
 **How to Run Validation Tests:**
 
-Build with validation tests enabled:
+The test suite is organized into three tiers:
+- **Unit tests** (`tests/unit/`) - Fast, mock-based tests with no hardware dependencies
+- **Integration tests** (`tests/integration/`) - Component interaction tests
+- **Hardware tests** (`tests/hardware/`) - Tests requiring actual Hailo NPU hardware
+
+Build with hardware tests enabled:
 ```sh
-cmake -H. -Bbuild -DBUILD_TESTER=ON -DBUILD_VALIDATION_TESTS=ON
+cmake -H. -Bbuild -DBUILD_TESTER=ON -DBUILD_HARDWARE_TESTS=ON
 cmake --build build
 ```
 
-Available validation tests:
+Available hardware tests:
 - `TestModelLoading` - Verifies model JSON configs can be parsed and HEF files are accessible
 - `TestSingleInference` - Tests inference produces valid outputs on test images (person, car, plate)
 - `TestFactoryMapping` - Validates algorithm-to-implementation factory mappings
@@ -87,6 +95,8 @@ Available validation tests:
 - `TestPipelineLpr` - Tests Detection + LPR multi-model pipeline with crop and batch transforms
 - `TestThreadSafety` - Verifies concurrent access from multiple threads
 - `TestAsyncBackend` - Stress tests the async backend
+- `TestLprDecoder` - Unit tests for LPR CTC decoding logic
+- `TestClassificationDecoder` - Unit tests for classification argmax/top-k logic
 
 Run individual tests:
 ```sh
@@ -97,9 +107,20 @@ Run individual tests:
 ./build/tests/TestPipelineLpr
 ./build/tests/TestThreadSafety
 ./build/tests/TestAsyncBackend
+./build/tests/TestLprDecoder
+./build/tests/TestClassificationDecoder
+```
+
+Or use ctest to run all registered tests:
+```sh
+ctest -N              # List available tests
+ctest                 # Run all tests
+ctest -V              # Run with verbose output
 ```
 
 All tests should report "ALL TESTS PASSED" on successful completion.
+
+For comprehensive architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Pipeline API
 
