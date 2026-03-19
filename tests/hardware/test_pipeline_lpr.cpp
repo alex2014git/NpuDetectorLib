@@ -187,6 +187,7 @@ bool test_detection_lpr_pipeline() {
 
     // Add edges (crop ROI with resize to LPR input size, and batch)
     // LPR model expects 168x48 input - resize during crop
+    // Based on actual model output: class 0 = vehicle, class 1 = license plate
     int edge1_result = pipeline.addEdge(Edge::cropRoi("detector", "lpr", 1, 168, 48)); // class 1 = license plate, resize to 168x48
     if (edge1_result != 0) {
         std::cout << "  SKIP: Could not add crop edge" << std::endl;
@@ -233,6 +234,67 @@ bool test_detection_lpr_pipeline() {
                       << " conf=" << det->confidence
                       << " bbox=[" << det->bbox.x_min << "," << det->bbox.y_min
                       << "-" << det->bbox.x_max << "," << det->bbox.y_max << "]" << std::endl;
+        }
+    }
+
+    // Debug: Save detection visualization and cropped plates
+    {
+        // Create a copy of the image for drawing
+        cv::Mat debug_image = image.clone();
+
+        // Draw all detections
+        for (size_t i = 0; i < detections.size(); ++i) {
+            if (auto det = detections[i].getResult<DetectionResult>("detector")) {
+                // Convert normalized bbox to pixel coordinates
+                int x = static_cast<int>(det->bbox.x_min * image.cols);
+                int y = static_cast<int>(det->bbox.y_min * image.rows);
+                int w = static_cast<int>((det->bbox.x_max - det->bbox.x_min) * image.cols);
+                int h = static_cast<int>((det->bbox.y_max - det->bbox.y_min) * image.rows);
+
+                // Draw rectangle
+                cv::rectangle(debug_image, cv::Rect(x, y, w, h), cv::Scalar(0, 255, 0), 2);
+
+                // Draw label
+                std::string label = "class=" + std::to_string(det->class_id) +
+                                   " conf=" + std::to_string(det->confidence);
+                cv::putText(debug_image, label, cv::Point(x, y - 10),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 255, 0), 2);
+            }
+        }
+
+        // Save detection debug image
+        cv::imwrite("tests/debug_detection_output.jpg", debug_image);
+        std::cout << "  [DEBUG] Saved detection output to tests/debug_detection_output.jpg" << std::endl;
+
+        // Save cropped plates (what LPR receives)
+        int crop_count = 0;
+        for (size_t i = 0; i < detections.size(); ++i) {
+            if (auto det = detections[i].getResult<DetectionResult>("detector")) {
+                // Only save license plates (class_id = 1 based on actual model output)
+                if (det->class_id == 1) {
+                    int x = static_cast<int>(det->bbox.x_min * image.cols);
+                    int y = static_cast<int>(det->bbox.y_min * image.rows);
+                    int w = static_cast<int>((det->bbox.x_max - det->bbox.x_min) * image.cols);
+                    int h = static_cast<int>((det->bbox.y_max - det->bbox.y_min) * image.rows);
+
+                    // Clamp to image bounds
+                    x = std::max(0, x);
+                    y = std::max(0, y);
+                    w = std::min(w, image.cols - x);
+                    h = std::min(h, image.rows - y);
+
+                    if (w > 0 && h > 0) {
+                        cv::Mat cropped = image(cv::Rect(x, y, w, h)).clone();
+                        // Resize to LPR input size
+                        cv::Mat lpr_input;
+                        cv::resize(cropped, lpr_input, cv::Size(168, 48));
+
+                        std::string filename = "tests/debug_plate_crop_" + std::to_string(crop_count++) + ".jpg";
+                        cv::imwrite(filename, lpr_input);
+                        std::cout << "  [DEBUG] Saved plate crop to " << filename << std::endl;
+                    }
+                }
+            }
         }
     }
 

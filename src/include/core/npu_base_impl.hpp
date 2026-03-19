@@ -57,7 +57,23 @@ public:
     /// @brief Get model input height
     int GetModelHeight() const override { return _model_height; }
 
-    // Backend injection for testing and mocking
+    /// @brief Get preprocessing scale factor (from last inference)
+    /// @return Scale factor used for resizing (scale = new_size / original_size)
+    float GetLastPreprocessScale() const { return _last_preprocess_scale; }
+
+    /// @brief Get preprocessing offset (from last inference)
+    /// @return X offset (padding) applied during letterboxing
+    int GetLastPreprocessOffsetX() const { return _last_preprocess_offset_x; }
+
+    /// @brief Get preprocessing offset (from last inference)
+    /// @return Y offset (padding) applied during letterboxing
+    int GetLastPreprocessOffsetY() const { return _last_preprocess_offset_y; }
+
+    /// @brief Check if last preprocessing used letterbox
+    bool GetLastPreprocessUsedLetterbox() const { return _last_preprocess_used_letterbox; }
+
+    /// @brief Clear preprocessing state (call before each inference)
+    void ClearPreprocessState();
     // Allow factory to inject backend (used for testing with mocks)
     void SetBackend(std::shared_ptr<NpuBackend> backend) { _backend = backend; }
 
@@ -97,6 +113,14 @@ protected:
     std::shared_ptr<NpuBackend> _backend;
     rapidjson::Document _dom;
     struct timeval _start_time, _stop_time;
+
+    // Preprocessing parameters from last inference (for coordinate transformation)
+    float _last_preprocess_scale = 1.0f;      // Scale factor used (scale = new_size / original_size)
+    int _last_preprocess_offset_x = 0;        // X padding offset for letterbox
+    int _last_preprocess_offset_y = 0;        // Y padding offset for letterbox
+    bool _last_preprocess_used_letterbox = false;  // Whether letterbox was used
+    int _last_original_width = 0;             // Original image width
+    int _last_original_height = 0;            // Original image height
 
     // Protected methods for subclasses
     int InitNPU();

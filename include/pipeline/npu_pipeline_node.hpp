@@ -157,7 +157,9 @@ protected:
 
     // Extract NPU results and set on pipeline output object
     // Handles all result types (LprResult, ClassificationResult, DetectionResult)
-    void extractAndSetResults(PipelineObject& output, const npu::NpuResult& result);
+    // Transforms detection coordinates from model space to original image space
+    void extractAndSetResults(PipelineObject& output, const npu::NpuResult& result,
+                              int original_width = 0, int original_height = 0);
 
 private:
     std::string _name;

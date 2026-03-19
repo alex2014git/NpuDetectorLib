@@ -2,12 +2,90 @@
 #include "pipeline/npu_pipeline_context.hpp"
 #include "npu.hpp"
 #include "npu_factory.hpp"
+#include "core/npu_base_impl.hpp"
 #include "common/debug_logger.hpp"
 #include <opencv2/opencv.hpp>
 #include <algorithm>
 #include <cmath>
 
 namespace npu_pipeline {
+
+// Helper function to transform coordinates from model input space to original image space
+// This reverses the preprocessing transformation (letterbox or resize)
+static ObjectRoi transformCoordinates(
+    const ObjectRoi& model_roi,
+    int model_width, int model_height,
+    int original_width, int original_height,
+    bool used_letterbox,
+    float scale, int offset_x, int offset_y) {
+
+    ObjectRoi original_roi;
+    original_roi.class_id = model_roi.class_id;
+    original_roi.class_name = model_roi.class_name;
+    original_roi.confidence = model_roi.confidence;
+
+    if (used_letterbox) {
+        // LETTER_BOX mode: aspect ratio preserved, padding added
+        // model_roi coordinates are in [0,1] normalized space of model input
+        // Step 1: Convert to pixel coordinates in model input space
+        float x_min_pixel = model_roi.x_min * model_width;
+        float y_min_pixel = model_roi.y_min * model_height;
+        float x_max_pixel = model_roi.x_max * model_width;
+        float y_max_pixel = model_roi.y_max * model_height;
+
+        // Step 2: Remove letterbox padding offset
+        x_min_pixel -= offset_x;
+        y_min_pixel -= offset_y;
+        x_max_pixel -= offset_x;
+        y_max_pixel -= offset_y;
+
+        // Step 3: Scale back to original image size
+        // scale = new_size / original_size, so original = pixel / scale
+        x_min_pixel /= scale;
+        y_min_pixel /= scale;
+        x_max_pixel /= scale;
+        y_max_pixel /= scale;
+
+        // Step 4: Normalize to [0,1] based on original image dimensions
+        original_roi.x_min = x_min_pixel / original_width;
+        original_roi.y_min = y_min_pixel / original_height;
+        original_roi.x_max = x_max_pixel / original_width;
+        original_roi.y_max = y_max_pixel / original_height;
+    } else {
+        // Simple resize mode: aspect ratio distorted
+        // Coordinates are stretched to fill the model input
+        // Step 1: Convert to pixel coordinates in model input space
+        float x_min_pixel = model_roi.x_min * model_width;
+        float y_min_pixel = model_roi.y_min * model_height;
+        float x_max_pixel = model_roi.x_max * model_width;
+        float y_max_pixel = model_roi.y_max * model_height;
+
+        // Step 2: Scale to original image dimensions independently
+        // Note: This assumes uniform scaling in both dimensions during resize
+        // The scale factor from PreProcessing is based on width
+        float scale_x = static_cast<float>(original_width) / model_width;
+        float scale_y = static_cast<float>(original_height) / model_height;
+
+        x_min_pixel *= scale_x;
+        y_min_pixel *= scale_y;
+        x_max_pixel *= scale_x;
+        y_max_pixel *= scale_y;
+
+        // Step 3: Normalize to [0,1] based on original image dimensions
+        original_roi.x_min = x_min_pixel / original_width;
+        original_roi.y_min = y_min_pixel / original_height;
+        original_roi.x_max = x_max_pixel / original_width;
+        original_roi.y_max = y_max_pixel / original_height;
+    }
+
+    // Clamp to valid range [0, 1]
+    original_roi.x_min = std::max(0.0f, std::min(1.0f, original_roi.x_min));
+    original_roi.y_min = std::max(0.0f, std::min(1.0f, original_roi.y_min));
+    original_roi.x_max = std::max(0.0f, std::min(1.0f, original_roi.x_max));
+    original_roi.y_max = std::max(0.0f, std::min(1.0f, original_roi.y_max));
+
+    return original_roi;
+}
 
 // Check if node is ready to execute
 bool PipelineNode::isReady(const FrameResults& frame) const {
@@ -48,7 +126,8 @@ void NpuInferenceNode::release() {
 }
 
 // Extract NPU results and set on pipeline output object
-void NpuInferenceNode::extractAndSetResults(PipelineObject& output, const npu::NpuResult& result) {
+void NpuInferenceNode::extractAndSetResults(PipelineObject& output, const npu::NpuResult& result,
+                                             int original_width, int original_height) {
     std::visit([&](auto&& arg) {
         using T = std::decay_t<decltype(arg)>;
         if constexpr (std::is_same_v<T, npu::LprResult>) {
@@ -71,17 +150,51 @@ void NpuInferenceNode::extractAndSetResults(PipelineObject& output, const npu::N
             output.setResult(_name, pipeline_result);
         } else if constexpr (std::is_same_v<T, npu::DetectionResult>) {
             // Convert npu::DetectionResult to npu_pipeline::DetectionResult
+            // Transform coordinates from model space to original image space
+            ObjectRoi model_roi;
+            model_roi.y_min = arg.bbox.y_min;
+            model_roi.x_min = arg.bbox.x_min;
+            model_roi.y_max = arg.bbox.y_max;
+            model_roi.x_max = arg.bbox.x_max;
+            model_roi.confidence = arg.confidence;
+            model_roi.class_id = arg.class_id;
+            model_roi.class_name = arg.class_name;
+
+            // Get preprocessing parameters from NPU
+            int model_width = _npu->GetModelWidth();
+            int model_height = _npu->GetModelHeight();
+
+            // Get the preprocessing parameters - need to cast to NpuBaseImpl
+            // Since we know the actual type, we can use static_pointer_cast
+            // But to avoid exposing implementation details, let's use dynamic_cast
+            auto* base_impl = dynamic_cast<NpuBaseImpl*>(_npu.get());
+            bool used_letterbox = false;
+            float scale = 1.0f;
+            int offset_x = 0;
+            int offset_y = 0;
+
+            if (base_impl) {
+                used_letterbox = base_impl->GetLastPreprocessUsedLetterbox();
+                scale = base_impl->GetLastPreprocessScale();
+                offset_x = base_impl->GetLastPreprocessOffsetX();
+                offset_y = base_impl->GetLastPreprocessOffsetY();
+            }
+
+            // Transform coordinates to original image space
+            ObjectRoi original_roi = transformCoordinates(
+                model_roi,
+                model_width, model_height,
+                original_width, original_height,
+                used_letterbox,
+                scale, offset_x, offset_y);
+
             DetectionResult pipeline_result;
             pipeline_result.class_id = arg.class_id;
             pipeline_result.confidence = arg.confidence;
-            pipeline_result.bbox.y_min = arg.bbox.y_min;
-            pipeline_result.bbox.x_min = arg.bbox.x_min;
-            pipeline_result.bbox.y_max = arg.bbox.y_max;
-            pipeline_result.bbox.x_max = arg.bbox.x_max;
-            pipeline_result.bbox.confidence = arg.confidence;
-            pipeline_result.bbox.class_id = arg.class_id;
-            pipeline_result.bbox.class_name = arg.class_name;
+            pipeline_result.bbox = original_roi;
             output.setResult(_name, pipeline_result);
+            // Set ROI from transformed detection bbox for downstream cropping
+            output.roi = original_roi;
         }
         // Other types (PoseResult, SegmentationResult) can be added as needed
     }, result);
@@ -161,10 +274,14 @@ PipelineObject NpuInferenceNode::processObject(const PipelineObject& input,
         return output;
     }
 
+    // Get original image dimensions for coordinate transformation
+    int original_width = img_data.width;
+    int original_height = img_data.height;
+
     // Extract results using unified GetResults() API
     auto results = _npu->GetResults();
     for (const auto& result : results) {
-        extractAndSetResults(output, result);
+        extractAndSetResults(output, result, original_width, original_height);
     }
 
     // Clear results for next inference
@@ -233,12 +350,84 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
             if (ret >= 0) {
                 // Extract results using unified GetResults() API
                 auto results = _npu->GetResults();
+
+                // Check if any results are detection results
+                bool has_detections = false;
                 for (const auto& result : results) {
-                    extractAndSetResults(out, result);
+                    bool is_detection = std::visit([](auto&& arg) -> bool {
+                        using T = std::decay_t<decltype(arg)>;
+                        return std::is_same_v<T, npu::DetectionResult>;
+                    }, result);
+                    if (is_detection) {
+                        has_detections = true;
+                        break;
+                    }
+                }
+
+                // Get original image dimensions for coordinate transformation
+                int original_width = img_data.width;
+                int original_height = img_data.height;
+
+                if (has_detections) {
+                    // Get preprocessing parameters from NPU
+                    int model_width = _npu->GetModelWidth();
+                    int model_height = _npu->GetModelHeight();
+                    auto* base_impl = dynamic_cast<NpuBaseImpl*>(_npu.get());
+                    bool used_letterbox = false;
+                    float scale = 1.0f;
+                    int offset_x = 0;
+                    int offset_y = 0;
+                    if (base_impl) {
+                        used_letterbox = base_impl->GetLastPreprocessUsedLetterbox();
+                        scale = base_impl->GetLastPreprocessScale();
+                        offset_x = base_impl->GetLastPreprocessOffsetX();
+                        offset_y = base_impl->GetLastPreprocessOffsetY();
+                    }
+
+                    // For detection models, create one PipelineObject per detection
+                    for (const auto& result : results) {
+                        bool is_detection = std::visit([](auto&& arg) -> bool {
+                            using T = std::decay_t<decltype(arg)>;
+                            return std::is_same_v<T, npu::DetectionResult>;
+                        }, result);
+
+                        if (is_detection) {
+                            const auto& det_result = std::get<npu::DetectionResult>(result);
+                            PipelineObject det_out = out;
+
+                            // Transform coordinates from model space to original image space
+                            ObjectRoi model_roi;
+                            model_roi.y_min = det_result.bbox.y_min;
+                            model_roi.x_min = det_result.bbox.x_min;
+                            model_roi.y_max = det_result.bbox.y_max;
+                            model_roi.x_max = det_result.bbox.x_max;
+                            model_roi.confidence = det_result.confidence;
+                            model_roi.class_id = det_result.class_id;
+                            model_roi.class_name = det_result.class_name;
+
+                            ObjectRoi original_roi = transformCoordinates(
+                                model_roi, model_width, model_height,
+                                original_width, original_height,
+                                used_letterbox, scale, offset_x, offset_y);
+
+                            DetectionResult pipeline_result;
+                            pipeline_result.class_id = det_result.class_id;
+                            pipeline_result.confidence = det_result.confidence;
+                            pipeline_result.bbox = original_roi;
+                            det_out.roi = original_roi;
+                            det_out.setResult(_name, pipeline_result);
+                            outputs.push_back(std::move(det_out));
+                        }
+                    }
+                } else {
+                    // Non-detection results (LPR, classification, etc.)
+                    for (const auto& result : results) {
+                        extractAndSetResults(out, result, original_width, original_height);
+                    }
+                    outputs.push_back(std::move(out));
                 }
             }
             _npu->ClearResults();
-            outputs.push_back(std::move(out));
             continue;  // Skip the normal processing below
         }
 
@@ -312,39 +501,90 @@ std::vector<PipelineObject> NpuInferenceNode::processBatch(
         if (ret >= 0) {
             // Extract results using unified GetResults() API
             auto results = _npu->GetResults();
+
+            // Check if any results are detection results
+            bool has_detections = false;
             for (const auto& result : results) {
-                // Handle detection results specially - create new PipelineObject per detection
                 bool is_detection = std::visit([](auto&& arg) -> bool {
                     using T = std::decay_t<decltype(arg)>;
                     return std::is_same_v<T, npu::DetectionResult>;
                 }, result);
-
                 if (is_detection) {
-                    // For detection models, create one PipelineObject per detection
-                    const auto& det_result = std::get<npu::DetectionResult>(result);
-                    PipelineObject det_out = out;
-                    DetectionResult pipeline_result;
-                    pipeline_result.class_id = det_result.class_id;
-                    pipeline_result.confidence = det_result.confidence;
-                    pipeline_result.bbox.y_min = det_result.bbox.y_min;
-                    pipeline_result.bbox.x_min = det_result.bbox.x_min;
-                    pipeline_result.bbox.y_max = det_result.bbox.y_max;
-                    pipeline_result.bbox.x_max = det_result.bbox.x_max;
-                    pipeline_result.bbox.class_id = det_result.class_id;
-                    pipeline_result.bbox.confidence = det_result.confidence;
-                    det_out.roi = pipeline_result.bbox;
-                    det_out.setResult(_name, pipeline_result);
-                    outputs.push_back(std::move(det_out));
-                } else {
-                    extractAndSetResults(out, result);
+                    has_detections = true;
+                    break;
                 }
             }
+
+            // Get original image dimensions for coordinate transformation
+            int original_width = img_data.width;
+            int original_height = img_data.height;
+
+            if (has_detections) {
+                // Get preprocessing parameters from NPU
+                int model_width = _npu->GetModelWidth();
+                int model_height = _npu->GetModelHeight();
+                auto* base_impl = dynamic_cast<NpuBaseImpl*>(_npu.get());
+                bool used_letterbox = false;
+                float scale = 1.0f;
+                int offset_x = 0;
+                int offset_y = 0;
+                if (base_impl) {
+                    used_letterbox = base_impl->GetLastPreprocessUsedLetterbox();
+                    scale = base_impl->GetLastPreprocessScale();
+                    offset_x = base_impl->GetLastPreprocessOffsetX();
+                    offset_y = base_impl->GetLastPreprocessOffsetY();
+                }
+
+                // For detection models, create one PipelineObject per detection
+                for (const auto& result : results) {
+                    bool is_detection = std::visit([](auto&& arg) -> bool {
+                        using T = std::decay_t<decltype(arg)>;
+                        return std::is_same_v<T, npu::DetectionResult>;
+                    }, result);
+
+                    if (is_detection) {
+                        const auto& det_result = std::get<npu::DetectionResult>(result);
+                        PipelineObject det_out = out;
+
+                        // Transform coordinates from model space to original image space
+                        ObjectRoi model_roi;
+                        model_roi.y_min = det_result.bbox.y_min;
+                        model_roi.x_min = det_result.bbox.x_min;
+                        model_roi.y_max = det_result.bbox.y_max;
+                        model_roi.x_max = det_result.bbox.x_max;
+                        model_roi.confidence = det_result.confidence;
+                        model_roi.class_id = det_result.class_id;
+                        model_roi.class_name = det_result.class_name;
+
+                        ObjectRoi original_roi = transformCoordinates(
+                            model_roi, model_width, model_height,
+                            original_width, original_height,
+                            used_letterbox, scale, offset_x, offset_y);
+
+                        DetectionResult pipeline_result;
+                        pipeline_result.class_id = det_result.class_id;
+                        pipeline_result.confidence = det_result.confidence;
+                        pipeline_result.bbox = original_roi;
+                        det_out.roi = original_roi;
+                        det_out.setResult(_name, pipeline_result);
+                        outputs.push_back(std::move(det_out));
+                    }
+                }
+            } else {
+                // Non-detection results (LPR, classification, etc.)
+                for (const auto& result : results) {
+                    extractAndSetResults(out, result, original_width, original_height);
+                }
+                outputs.push_back(std::move(out));
+            }
+
             // Clear the detection results for next inference
             _npu->ClearResults();
-            continue;  // Skip the outputs.push_back at the end since we already added objects
+        } else {
+            // Inference failed, still add the output
+            outputs.push_back(std::move(out));
         }
 
-        outputs.push_back(std::move(out));
         batch_idx++;
     }
 

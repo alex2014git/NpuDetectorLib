@@ -28,6 +28,15 @@ NpuBaseImpl::~NpuBaseImpl() {
     Release();
 }
 
+void NpuBaseImpl::ClearPreprocessState() {
+    _last_preprocess_scale = 1.0f;
+    _last_preprocess_offset_x = 0;
+    _last_preprocess_offset_y = 0;
+    _last_preprocess_used_letterbox = false;
+    _last_original_width = 0;
+    _last_original_height = 0;
+}
+
 static hailo_format_type_t enumStr2Enum(const char* enumStr) {
     static const std::unordered_map<std::string, hailo_format_type_t> strToEnumMap = {
         {"HAILO_FORMAT_TYPE_AUTO", HAILO_FORMAT_TYPE_AUTO},
@@ -181,6 +190,12 @@ cv::Mat NpuBaseImpl::Letterbox(const cv::Mat& img, int target_width, int target_
     resized_img.copyTo(letterbox(roi));
 
     ratio = 1.0f / scale;
+
+    // Store preprocessing parameters for coordinate transformation
+    _last_preprocess_scale = scale;  // scale = new_size / original_size
+    _last_preprocess_offset_x = x_offset;
+    _last_preprocess_offset_y = y_offset;
+
     return letterbox;
 }
 
@@ -188,14 +203,23 @@ void NpuBaseImpl::PreProcessing(cv::Mat& org_frame, bool needPreProcess,
                                 cv::Mat& out_frame, float& ratio) {
     if (!needPreProcess) {
         out_frame = org_frame;
+        _last_preprocess_used_letterbox = false;
+        _last_preprocess_scale = 1.0f;
+        _last_preprocess_offset_x = 0;
+        _last_preprocess_offset_y = 0;
         return;
     }
 
     cv::Mat tmp;
 #ifdef LETTER_BOX
     tmp = Letterbox(org_frame, _model_width, _model_height, ratio, _letterbox_color);
+    _last_preprocess_used_letterbox = true;
 #else
     cv::resize(org_frame, tmp, cv::Size(_model_width, _model_height));
+    _last_preprocess_used_letterbox = false;
+    // For simple resize, scale is based on width/height independently
+    _last_preprocess_scale = static_cast<float>(_model_width) / org_frame.cols;
+    // Note: This distorts aspect ratio, coordinates need special handling
 #endif
 
     // Convert to RGB or NV12 based on model requirements
@@ -220,9 +244,16 @@ MnpReturnCode NpuBaseImpl::NpuPorcessing(image_share_t imgData, bool needPreProc
     if (!needPreProcess) {
         inferData.assign(static_cast<T*>(imgData.data),
                          static_cast<T*>(imgData.data) + _network_input_size);
+        _last_original_width = imgData.width;
+        _last_original_height = imgData.height;
     } else {
         float ratio = 1.0f;
         cv::Mat oriFrame(cv::Size(imgData.width, imgData.height), CV_8UC3, imgData.data);
+
+        // Store original dimensions before preprocessing transforms them
+        _last_original_width = imgData.width;
+        _last_original_height = imgData.height;
+
         PreProcessing(oriFrame, needPreProcess, inferFrame, ratio);
 
         if (!inferFrame.isContinuous()) {
