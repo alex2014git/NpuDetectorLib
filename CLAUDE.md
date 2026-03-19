@@ -45,7 +45,7 @@ Commits are blocked if build or test fails.
 - `BUILD_TESTER`: Build test executable (default: OFF)
 - `BUILD_UNIT_TESTS`: Build unit tests with mocks (default: OFF)
 - `BUILD_INTEGRATION_TESTS`: Build integration tests (default: OFF)
-- `BUILD_HARDWARE_TESTS`: Build hardware-dependent tests (default: ON)
+- `BUILD_HARDWARE_TESTS`: Build hardware-dependent tests (default: OFF)
 
 ## Multi-Model Pipeline Architecture
 
@@ -573,9 +573,9 @@ auto npu = std::make_shared<NpuYoloImpl>(mock_backend);
 | Test harness | `tests/hardware/main.cpp` | Multi-threaded test entry point |
 | NPU Interface | `include/npu.hpp` | Abstract base class definition |
 | Base Implementation | `src/core/npu_base_impl.cpp` | Preprocessing, NPU init, common utilities |
-| YOLOv8 Detection | `src/core/npu_yolov8_impl.cpp` | YOLOv8 detection post-processing |
-| YOLOv8 Pose | `src/core/npu_yolov8_pose_impl.cpp` | Keypoint detection post-processing |
-| YOLOv8 Segmentation | `src/core/npu_yolov8_seg_impl.cpp` | Instance segmentation post-processing |
+| YOLOv8 Detection | `src/implementations/npu_yolov8_impl.cpp` | YOLOv8 detection post-processing |
+| YOLOv8 Pose | `src/implementations/npu_yolov8_pose_impl.cpp` | Keypoint detection post-processing |
+| YOLOv8 Segmentation | `src/implementations/npu_yolov8_seg_impl.cpp` | Instance segmentation post-processing |
 | Pipeline Scheduler | `src/pipeline/npu_pipeline_scheduler.cpp` | Execution scheduling (296 lines) |
 | Pipeline Node | `src/pipeline/npu_pipeline_node.cpp` | NPU inference node (190 lines) |
 | Backend Interface | `src/include/core/npu_backend.hpp` | Backend abstraction interface |

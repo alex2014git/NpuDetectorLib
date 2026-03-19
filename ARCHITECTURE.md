@@ -340,7 +340,7 @@ tests/
 | `BUILD_TESTER` | OFF | Build TestExecutable (hardware tests entry point) |
 | `BUILD_UNIT_TESTS` | OFF | Build unit tests (mock-based) |
 | `BUILD_INTEGRATION_TESTS` | OFF | Build integration tests |
-| `BUILD_HARDWARE_TESTS` | ON | Build hardware-dependent tests |
+| `BUILD_HARDWARE_TESTS` | OFF | Build hardware-dependent tests |
 | `BUILD_VALIDATION_TESTS` | OFF | Alias for hardware tests |
 | `LETTER_BOX` | ON | Enable letterboxing preprocessing |
 | `SHOW_LABEL` | OFF | Enable label display on output |
@@ -439,11 +439,11 @@ ctest -V
 | `src/include/implementations/npu_yolov8_pose_impl.hpp` | YOLOv8 pose implementation |
 | `src/include/implementations/npu_yolov8_seg_impl.hpp` | YOLOv8 segmentation implementation |
 | `src/include/implementations/npu_yolo_nms_impl.hpp` | Hardware NMS implementation |
-| `src/core/npu_yolo_impl.cpp` | YOLOv5 implementation |
-| `src/core/npu_yolov8_impl.cpp` | YOLOv8 implementation |
-| `src/core/npu_yolov8_pose_impl.cpp` | YOLOv8 pose implementation |
-| `src/core/npu_yolov8_seg_impl.cpp` | YOLOv8 segmentation implementation |
-| `src/core/npu_yolo_nms_impl.cpp` | Hardware NMS implementation |
+| `src/implementations/npu_yolo_impl.cpp` | YOLOv5 implementation |
+| `src/implementations/npu_yolov8_impl.cpp` | YOLOv8 implementation |
+| `src/implementations/npu_yolov8_pose_impl.cpp` | YOLOv8 pose implementation |
+| `src/implementations/npu_yolov8_seg_impl.cpp` | YOLOv8 segmentation implementation |
+| `src/implementations/npu_yolo_nms_impl.cpp` | Hardware NMS implementation |
 | `src/core/npu_base_impl.cpp` | Base implementation |
 | `src/core/npu_base_alg_impl.cpp` | Simple model base implementation |
 | `src/core/npu_detection_impl.cpp` | Detection base implementation |

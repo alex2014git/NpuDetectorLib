@@ -76,10 +76,9 @@ Example for using the usb camera(only support one stream):
 
 **How to Run Validation Tests:**
 
-The test suite is organized into three tiers:
-- **Unit tests** (`tests/unit/`) - Fast, mock-based tests with no hardware dependencies
-- **Integration tests** (`tests/integration/`) - Component interaction tests
-- **Hardware tests** (`tests/hardware/`) - Tests requiring actual Hailo NPU hardware
+The test suite currently consists of hardware tests requiring actual Hailo NPU hardware:
+
+> **Note:** Unit tests (`tests/unit/`) and Integration tests (`tests/integration/`) are currently placeholders reserved for future Phase 2 development. All tests are located in `tests/hardware/`.
 
 Build with hardware tests enabled:
 ```sh
